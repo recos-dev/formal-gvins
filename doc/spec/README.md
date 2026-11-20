@@ -10,6 +10,11 @@ feature ownership and the proposed local MSCKF. It is not an implemented or
 approved estimator. Profile values and open acceptance decisions remain explicit.
 GNSS, mapping, relocalization and loop correction remain extension proposals.
 
+For source/test pointers and remaining evidence gaps, use the
+[requirements inventory](../analysis/requirements-inventory.md). The
+[verification policy](verification.md) separates approval, implementation,
+proofs, native tests and identified executions.
+
 ## Common contracts
 
 | ID | Requirement | Status |

@@ -8,6 +8,9 @@ requirement-decomposition relationship.
 |---|---|
 | Specification format and approval | [Writing standard and templates](spec/TEMPLATE.md) |
 | Requirements | [Specification index](spec/README.md) |
+| Verification and evidence acceptance | [Verification policy](spec/verification.md) |
+| Requirement implementation and evidence gaps | [Requirements inventory](analysis/requirements-inventory.md) |
+| Planned development work | [Work list](roadmap.md) |
 | C++ readability and organization | [Coding style](guides/coding-style.md) |
 | Language and execution restrictions | [C++ subset](spec/requirements/common/cpp-subset.md) |
 | Offline experiments and regression data | [Dataset selection and regression proposal](analysis/offline-datasets.md) |
