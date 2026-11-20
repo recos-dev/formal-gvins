@@ -7,7 +7,8 @@ verification. Existing frontend decisions are recorded in the
 ## B-01: Per-module unit benchmarks
 
 **Status:** In progress; C++ ORB execution on a fixed EuRoC window, known-translation
-scoring, per-frame timings/reports and unit/integration tests are implemented.
+scoring, per-frame timings/reports and unit/integration tests are implemented for
+CPU and CUDA, with local RTX 3060 execution checked.
 Per-stage profiling, qualified CPU/CUDA comparison and reviewed baselines remain
 pending. See the [runnable benchmark](guides/frontend.md#fixed-dataset-orb-benchmark).
 
@@ -44,6 +45,6 @@ Completion criteria:
   regression baselines and links to relevant requirements. Keep run artifacts in
   ignored output directories; review acceptance thresholds separately.
 
-First resolve the documented CPU/CUDA descriptor-smoothing mismatch before
-treating the frontend comparison as a matched-settings benchmark. Add estimator
-accuracy benchmarks when the corresponding estimator modules exist.
+Descriptor-smoothing settings are aligned; controlled timing baselines and Orin
+measurements remain pending. Add estimator accuracy benchmarks when the
+corresponding estimator modules exist.

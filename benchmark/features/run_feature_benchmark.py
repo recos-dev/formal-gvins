@@ -19,6 +19,8 @@ BENCHMARK_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCHMARK_DIR.parent.parent
 PROTOCOL = "euroc-orb-v2"
 WORKLOADS = ("temporal", "translation")
+ADAPTER_PROFILE = {"wta_k": 2, "patch_size": 31, "edge_threshold": 31,
+                   "score_type": "HARRIS", "descriptor_smoothing": "enabled"}
 OUTPUT_FILES = (
     "temporal.json", "translation.json", "resolved-profile.json", "summary.json", "frames.csv",
     "temporal.png", "translation.png", "opencv-build.txt", "raw.json",  # Retire the former interleaved output.
@@ -126,6 +128,12 @@ def case_counts(rows):
 def validate_native(raw, profile, manifest, workload, execution):
     if raw["protocol"] != PROTOCOL or raw["workload"] != workload or raw["execution"] != execution:
         raise ValueError("Native protocol, workload or execution differs from the request")
+    if raw["adapter"] != ADAPTER_PROFILE:
+        raise ValueError("Native ORB adapter settings differ from the benchmark profile")
+    if execution == "cuda":
+        device = raw["cuda_device"]
+        if not isinstance(device, dict) or not isinstance(device.get("name"), str) or not device["name"].strip():
+            raise ValueError("CUDA result lacks device identity")
     for name, expected in profile["tracking"].items():
         # scale_factor and ratio are binary32 in the production API; the other real options are binary64.
         tolerance = 1e-7 if name in ("scale_factor", "ratio") else 1e-12
@@ -257,9 +265,12 @@ def execute_workload(executable, dataset, snapshot, directory, workload, executi
     if execution == "cuda":
         command.append("--cuda")
     print(f"Running {workload}: {profile['frame_count']} frames", flush=True)
+    native_error = ""
     try:
         process = subprocess.run(command, check=False, capture_output=True, text=True, timeout=300)
         result["exit_code"] = process.returncode
+        if process.returncode != 0:
+            native_error = process.stderr.strip()
         path = directory / f"{workload}.json"
         if path.is_file():
             raw = json.loads(path.read_text())
@@ -272,7 +283,7 @@ def execute_workload(executable, dataset, snapshot, directory, workload, executi
             raise RuntimeError("Incomplete native output")
         result["status"] = "complete"
     except ERRORS as error:
-        result["error"] = str(error)
+        result["error"] = native_error or str(error)
     return result, rows
 
 

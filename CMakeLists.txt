@@ -76,6 +76,14 @@ if(FORMAL_GVINS_BUILD_FRONTEND)
                     --executable $<TARGET_FILE:orb_benchmark> --dataset "${FORMAL_GVINS_BENCHMARK_DATASET}"
                     --output "${CMAKE_CURRENT_BINARY_DIR}/feature-benchmark-output")
             set_tests_properties(feature_benchmark_euroc PROPERTIES LABELS "dataset" TIMEOUT 660)
+            if(FORMAL_GVINS_FRONTEND_CUDA)
+                add_test(NAME feature_benchmark_euroc_cuda
+                    COMMAND "${Python3_EXECUTABLE}" "${FEATURE_BENCHMARK_DIR}/run_feature_benchmark.py"
+                        --executable $<TARGET_FILE:orb_benchmark> --dataset "${FORMAL_GVINS_BENCHMARK_DATASET}"
+                        --output "${CMAKE_CURRENT_BINARY_DIR}/feature-benchmark-cuda-output" --cuda)
+                set_tests_properties(feature_benchmark_euroc_cuda PROPERTIES
+                    LABELS "dataset;gpu" RESOURCE_LOCK gpu TIMEOUT 660)
+            endif()
         endif()
         add_executable(orb_frontend tests/test_orb.cpp)
         target_link_libraries(orb_frontend PRIVATE formal_gvins_frontend)
@@ -90,7 +98,7 @@ if(FORMAL_GVINS_BUILD_FRONTEND)
         if(FORMAL_GVINS_FRONTEND_CUDA)
             add_test(NAME orb_cuda COMMAND orb_frontend --cuda)
             add_test(NAME orb_tracking_cuda COMMAND orb_tracking --cuda)
-            set_tests_properties(orb_cuda orb_tracking_cuda PROPERTIES LABELS "gpu")
+            set_tests_properties(orb_cuda orb_tracking_cuda PROPERTIES LABELS "gpu" RESOURCE_LOCK gpu)
         endif()
     endif()
     foreach(TARGET IN LISTS FRONTEND_TARGETS)

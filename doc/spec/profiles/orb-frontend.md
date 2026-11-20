@@ -20,7 +20,7 @@ basis for experiments, not permission to inherit another estimator's thresholds.
 |---|---|
 | Input | Undistorted zero-skew pinhole pixels; required actual K; `CV_8UC1`, optional same-size `CV_8UC1` mask with nonzero meaning admitted. |
 | Candidate extraction | 1000 features, scale 1.2, 8 levels, FAST 20, Harris score, patch/edge 31, first level 0. |
-| Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance. |
+| Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance; CPU and CUDA enable 7x7 Gaussian smoothing, sigma 2, `BORDER_REFLECT_101`. |
 | Publication | At most 400 features, 8 by 6 grid; stable response ordering, per-cell quotas; unused quotas are not redistributed. |
 | Association | Forward two-nearest candidates; strict ratio 0.75; greedily resolve one-to-one conflicts by distance, query index, then train index. |
 | Geometry | Calibrated essential-matrix five-point RANSAC; 1.5-pixel threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
@@ -38,11 +38,10 @@ OpenCV exceptions are contained, while host allocation exceptions may propagate.
 
 ## CPU/CUDA compatibility and acceptance gaps
 
-Current CPU ORB smooths before describing; the CUDA call explicitly disables
-descriptor smoothing. Treat these as distinct recipes until aligned and evaluated.
-Both paths using Hamming does not establish interchangeable descriptors or a
-matched-settings speedup. Even with matching settings, backend outputs need not
-be bit-identical. Check pairing, bounds, matching quality and complete latency.
+CPU and CUDA enable the same descriptor-smoothing parameters. This does not
+establish interchangeable descriptors or identical keypoints/track IDs. Check
+pairing, bounds, matching quality and complete latency for each backend. Stored
+map descriptors and vocabulary compatibility require separate qualification.
 
 The geometric test is an epipolar screen, not a depth/parallax, pose-observability
 or triangulation certificate. Minimum spacing, cross-scale deduplication, reciprocal

@@ -37,7 +37,7 @@ OrbExtractor::OrbExtractor(OrbOptions const & options) : m_execution(options.exe
                 return;
             }
             m_gpu = cv::cuda::ORB::create(options.feature_count, options.scale_factor, options.pyramid_levels, 31, 0, 2,
-                                          cv::ORB::HARRIS_SCORE, 31, options.fast_threshold, false);
+                                          cv::ORB::HARRIS_SCORE, 31, options.fast_threshold, true);
             m_matcher = cv::cuda::DescriptorMatcher::createBFMatcher(cv::NORM_HAMMING);
             m_stream = cv::makePtr<cv::cuda::Stream>();
 #else

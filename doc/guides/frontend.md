@@ -58,11 +58,10 @@ CUDA accelerates ORB extraction and Hamming matching. Image decoding/remapping,
 spatial selection, geometric checks and track bookkeeping remain on the CPU.
 Measure total pipeline latency and tracking quality, not just kernel time.
 
-The current CUDA call disables descriptor smoothing, whereas CPU ORB smooths
-before computing descriptors. This is a known preprocessing difference, not
-just an execution-backend difference. See the [reference settings and next
-checks](../analysis/orb-frontend-settings.md) before interpreting timings as a
-same-settings speedup or selecting deployment defaults.
+Both paths enable 7x7 Gaussian descriptor smoothing with sigma 2 and reflected
+borders. Equal preprocessing settings do not make their implementations or
+descriptor bytes identical. See the [reference settings and next
+checks](../analysis/orb-frontend-settings.md) before selecting deployment defaults.
 
 The extractor uses WTA_K=2 and Hamming matching. Configuration accepts 1--10000
 features, 1--16 pyramid levels, scale factor in (1, 2] and FAST threshold 0--255.
@@ -133,6 +132,52 @@ Benchmarks are grouped by subject under `benchmark/`. The `features/` category
 contains its C++ program, runner, scorer, workload profile and dedicated tests.
 Additional benchmark subjects belong in sibling directories when implemented.
 
+### Sequential CPU/CUDA run
+
+After building the CUDA frontend and extracting the dataset, run:
+
+```bash
+./scripts/run_benchmark.py features
+```
+
+This runs CPU and then CUDA through the same `build/frontend-cuda/orb_benchmark`
+executable, freezes one profile for both, and prints completion counts, latency
+percentiles, retained-feature counts and synthetic quality metrics. It reuses the
+single-backend runner below. A failed backend does not prevent attempting the
+next one. Missing CUDA is a failure, not a skipped comparison or CPU fallback.
+
+Every invocation creates a new `output/benchmark/features/<UTC timestamp>/`:
+
+```text
+profile.json       Frozen workload shared by CPU and CUDA
+report.md          Readable CPU/CUDA metric tables and total elapsed time
+summary.json       Combined results, source/input/build/device identities and status
+cpu/               Native results, frame CSV, images and OpenCV build information
+cuda/              The corresponding CUDA evidence
+```
+
+`summary.json` embeds the backend summaries and is published as complete only
+after both runs, binding checks and the readable report finish. Differences in
+input hashes, profile, executable/evaluator identity or reported build/adapter
+settings make the comparison fail while retaining both results. This check does
+not certify GPU determinism or controlled clocks/load. Quality metrics remain
+separate from timing; partial results cannot serve as a baseline.
+
+Use `--backend cpu` for a CPU-only run with `build/frontend-cpu/orb_benchmark`,
+or `--backend cuda` for CUDA only. `--executable PATH` overrides the executable
+for all selected backends. `--dataset`, `--profile` and `--output` select inputs
+or a named result directory; an existing output directory is rejected, preserving
+earlier review candidates. The script runs prebuilt binaries, not a build step.
+
+Saved results start with `baseline_review: unreviewed`. Before pinning a baseline,
+rebuild from a reviewed clean revision, inspect input/configuration identities and
+quality, and establish repeated-run timing/quality variation on the named host.
+Then select explicit acceptance tolerances and the compact records to version.
+This command does not approve, replace or compare against a regression baseline.
+Raw run directories remain Git-ignored.
+
+### Workloads and individual runs
+
 The first runnable benchmark uses the production C++ `OrbTracker`, the EuRoC
 reader and a shared Python evaluator. It does not replace the frontend with a
 Python ORB implementation. The [profile](../../benchmark/features/profile.json)
@@ -141,7 +186,7 @@ fixed RNG seed. Its `tracking` section explicitly sets every configurable ORB an
 tracking option; omitted options fail instead of inheriting production defaults.
 The runner writes `resolved-profile.json` once, passes that snapshot to both C++
 processes and checks their reported options against it. Fixed adapter properties
-such as WTA_K and descriptor smoothing remain identified in the native output.
+such as WTA_K and descriptor smoothing are recorded and checked by the runner.
 
 With the CPU build and extracted dataset above:
 
@@ -153,9 +198,32 @@ python3 benchmark/features/run_feature_benchmark.py
 The runner defaults to `datasets/euroc/MH_01_easy/mav0` and
 `build/frontend-cpu/orb_benchmark`. Use `--dataset MAV0_DIR` or `--executable PATH`
 to locate the same inputs/build elsewhere. `--profile FILE` selects a different
-explicit workload. `--cuda` selects the CUDA executable/backend with no CPU
-fallback; its smoothing difference still prevents a matched-settings speedup
-claim. This initial integration was exercised on the CPU profile.
+explicit workload. With the CUDA build above:
+
+```bash
+cmake --build build/frontend-cuda --target orb_benchmark --parallel 4
+python3 benchmark/features/run_feature_benchmark.py --cuda
+```
+
+`--cuda` selects the CUDA executable/backend with no CPU fallback. Both workloads
+record the selected device's name, index, compute capability and total device
+memory; this is device capacity, not measured allocation. An unavailable or
+incompatible device fails the run. CPU and CUDA execution have been tested on the
+fixed window using an RTX 3060 host; Orin execution remains untested.
+
+For a CPU/CUDA comparison using the same executable and OpenCV build, also run:
+
+```bash
+python3 benchmark/features/run_feature_benchmark.py \
+    --executable build/frontend-cuda/orb_benchmark
+```
+
+Run the two backends sequentially. Keep power, clock and background load controlled
+for timing comparisons; these development presets disable CPU SIMD/IPP, so their
+ratio does not represent maximum CPU performance.
+The fixed RNG seed does not guarantee repeatable CUDA detections or track IDs.
+Local repeated runs show small count/quality variation; GPU regression baselines
+need reviewed tolerances and repeated-run evidence, not raw-output hash equality.
 
 Two workloads use the same selected images:
 
@@ -181,7 +249,8 @@ case denominator; empty detections do not manufacture precision or RMSE.
 
 Results go to `output/feature-benchmark/cpu/` (or `cuda/`):
 
-- `temporal.json`, `translation.json`: separate native results, options and timings.
+- `temporal.json`, `translation.json`: separate native results, options, timings
+  and CUDA device identity when selected.
 - `resolved-profile.json`: the configuration snapshot consumed by both processes.
 - `frames.csv`: one row per scheduled case and workload, including failed/missing
   cases. Column names and order are fixed; unavailable measurements are empty.
@@ -212,6 +281,18 @@ cmake -S . -B build/frontend-cpu \
     -DFORMAL_GVINS_BENCHMARK_DATASET="$PWD/datasets/euroc/MH_01_easy/mav0"
 ctest --test-dir build/frontend-cpu -R feature_benchmark --output-on-failure
 ```
+
+For an already configured CUDA build, register the same dataset and run GPU tests:
+
+```bash
+cmake -S . -B build/frontend-cuda \
+    -DFORMAL_GVINS_BENCHMARK_DATASET="$PWD/datasets/euroc/MH_01_easy/mav0"
+ctest --test-dir build/frontend-cuda -L gpu --output-on-failure
+```
+
+This adds `feature_benchmark_euroc_cuda` alongside the CPU dataset test. GPU tests
+share a CTest resource lock to avoid competing with one another in a parallel run;
+external GPU users and other CTest processes are outside that lock.
 
 CTest keeps its separate temporary run outputs in its build directory. Dataset
 files and run outputs remain Git-ignored. Numerical-core-only builds do not

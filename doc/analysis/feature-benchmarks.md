@@ -1,8 +1,8 @@
 # Feature frontend regression and comparison
 
 **Status:** Draft design. The independent pair scorer and a first C++ ORB dataset
-pipeline are implemented and tested on CPU. Additional frontend adapters,
-qualified comparison profiles and reviewed regression baselines remain pending.
+pipeline are implemented and tested on CPU and RTX 3060 CUDA. Additional frontend
+adapters, qualified comparison profiles and reviewed regression baselines remain pending.
 
 This proposal refines [B-01](../roadmap.md#b-01-per-module-unit-benchmarks) for
 image frontends. [Verification policy](../spec/verification.md) owns evidence
@@ -152,9 +152,10 @@ Deadline misses use a predeclared budget; measured maximum is not WCET. Timing
 regression decisions require a sufficiently controlled host and a reviewed
 variation policy. Shared CI timing is informative, not an automatic performance gate.
 
-Resolve the existing [CPU/CUDA smoothing mismatch](orb-frontend-settings.md)
-before a matched-settings ORB acceleration claim. Keep the current CPU build's
-disabled SIMD/IPP profile distinct from any optimized CPU deployment profile.
+CPU and CUDA now use aligned [descriptor-smoothing settings](orb-frontend-settings.md);
+the benchmark records the actual device and rejects mismatched adapter settings.
+Keep the current CPU build's disabled SIMD/IPP profile distinct from any optimized
+CPU deployment profile.
 RTX 3060 and Orin need independent timing/resource baselines. Identical detections,
 descriptor bytes and track IDs across implementations are not a comparison premise.
 
@@ -229,6 +230,12 @@ The [usage guide](../guides/frontend.md#fixed-dataset-orb-benchmark) owns runnab
 commands, workload/timing boundaries and output descriptions. Both real adjacent
 frames and synthetic pairs pass through the production geometry filter; inlier
 membership is the prediction being evaluated, never the reference label.
+
+The [suite entry](../../scripts/run_benchmark.py) runs CPU then CUDA using a shared
+profile/executable, checks recorded input/build bindings, and archives combined
+JSON plus readable metric tables in a fresh output directory. Results remain
+unreviewed baseline candidates; reviewed tolerances, repeated-run qualification
+and automatic baseline comparison are not implemented.
 
 [feature_metrics.py](../../benchmark/features/feature_metrics.py) is a host-only Python
 3.10+ module using the standard library. It has no detector, OpenCV or GPU

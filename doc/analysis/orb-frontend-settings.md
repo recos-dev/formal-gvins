@@ -32,13 +32,13 @@ path.
 | Spatial selection | 8x6 quotas after extraction; no explicit minimum separation | 5x5 extraction grid; `min_px_dist=10` occupancy cells in the descriptor path | Adaptive subdivision within each pyramid level |
 | Subpixel refinement | None beyond the extractor's reported coordinates | Grid detector calls `cornerSubPix`: 5x5 window, 20 iterations, epsilon 0.001 | No equivalent separate refinement in the reviewed extraction path |
 | Preprocessing | Undistort whole image; no histogram equalization; 752x480 in the demo | Histogram equalization; detect on the original image domain, undistort coordinates for geometry | Mono / mono-inertial YAML requests 600x350 from 752x480; stereo-inertial keeps 752x480 |
-| Descriptor smoothing | CPU: 7x7 Gaussian, sigma 2; CUDA: currently disabled | CPU OpenCV descriptor computation includes smoothing | 7x7 Gaussian, sigma 2 |
+| Descriptor smoothing | CPU and CUDA: 7x7 Gaussian, sigma 2, reflected borders | CPU OpenCV descriptor computation includes smoothing | 7x7 Gaussian, sigma 2 |
 
 Sources: [OpenVINS configuration][ov-config], [grid detector][ov-grid],
 [descriptor extraction][ov-desc], [ORB-SLAM3 extractor][orb-extractor] and
 the pinned EuRoC profiles above.
 
-The CPU/CUDA smoothing difference follows the actual descriptor kernels:
+The smoothing parameters follow the actual descriptor implementations:
 [CPU preprocessing](https://github.com/opencv/opencv/blob/fe38fc608f6acb8b68953438a62305d8318f4fcd/modules/features2d/src/orb.cpp#L1234),
 [CUDA conditional preprocessing](https://github.com/opencv/opencv_contrib/blob/d99ad2a188210cc35067c2e60076eed7c2442bc3/modules/cudafeatures2d/src/orb.cpp#L811),
 and [our constructor arguments](../../src/vision/orb.cpp).
@@ -103,18 +103,18 @@ VINS-Mono's loop path uses FAST threshold 20 and BRIEF, not the same local track
 | Item | Recommendation and evidence boundary |
 |---|---|
 | Basic descriptor profile | Keep scale 1.2, 8 levels, FAST 20, WTA_K=2/Hamming and patch 31 as a source-backed starting point. This does not validate accuracy or budgets. |
-| CPU/CUDA comparability | First enable CUDA descriptor blur to match the CPU preprocessing intention, then rerun quality and timing checks. Equal blur settings still do not imply bitwise-identical extraction/descriptors. |
+| CPU/CUDA comparability | CUDA descriptor blur is enabled to match the CPU preprocessing intention. The fixed-window benchmark exercises both paths; equal blur settings do not imply identical extraction/descriptors or qualify other sequences/devices. |
 | Association policy | Compare reciprocal matching with the current greedy rule; use OpenVINS's 0.70 as a reference trial alongside 0.75. Do not copy its ratio edge-case behavior. |
 | Spatial distribution | Evaluate proximity suppression and cross-scale duplicate selection before raising feature counts. Test 200 and 400 retained observations separately from the 1000-candidate budget. Grid-first detection and post-selection quotas are not equivalent. |
 | Low texture and pixel precision | Evaluate FAST 20-to-7 fallback, histogram processing and subpixel refinement separately. Each changes behavior, cost or measurement-noise assumptions. |
 | Geometry | Retain the declared calibrated essential model for the initial comparison; test thresholds 1.0/1.5 in its stated domain. The reference F model/threshold is not a drop-in equivalent. Neither a RANSAC threshold nor confidence is a calibrated measurement covariance. |
 | Future map descriptors | Bind extraction/preprocessing/version to stored descriptors and the vocabulary. Do not assume CPU, CUDA, OpenVINS or ORB-SLAM3 descriptors are interchangeable because each is called ORB. |
 
-**Known comparison limitation:** the earlier local CPU/CUDA timings were measured
-with CPU smoothing enabled and CUDA smoothing disabled, and with CPU SIMD/IPP
-disabled. They establish execution of those two profiles, not a controlled
-same-settings acceleration ratio. They must not become a target performance
-requirement or an accuracy-equivalence claim.
+**Comparison limits:** results with CUDA smoothing disabled are a different
+profile and cannot serve as an unchanged-algorithm baseline for the current path.
+The development CPU build disables SIMD/IPP; comparisons against it do not measure
+maximum CPU performance. Timing and synthetic-match scores are not target
+performance requirements or estimator accuracy-equivalence claims.
 
 Use MH_01 for controlled development comparisons, then separate MH sequences for
 validation. Change one policy at a time, keeping image domain, resolution,

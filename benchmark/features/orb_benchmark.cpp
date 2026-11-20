@@ -136,7 +136,36 @@ void write_options(cv::FileStorage & output, TrackingOptions const & options)
            << "{"
            << "wta_k" << 2 << "patch_size" << 31 << "edge_threshold" << 31 << "score_type"
            << "HARRIS"
-           << "descriptor_smoothing" << (options.orb.execution == Execution::cpu ? "enabled" : "disabled") << "}";
+           << "descriptor_smoothing"
+           << "enabled"
+           << "}";
+}
+
+void write_device(cv::FileStorage & output, Execution execution)
+{
+    if (execution != Execution::cuda)
+    {
+        return;
+    }
+#if defined(FORMAL_GVINS_FRONTEND_CUDA)
+    if (cv::cuda::getCudaEnabledDeviceCount() <= 0)
+    {
+        throw std::runtime_error("CUDA requested but no enabled device is available");
+    }
+    cv::cuda::DeviceInfo const device;
+    if (!device.isCompatible())
+    {
+        throw std::runtime_error("OpenCV CUDA build is incompatible with the selected device");
+    }
+    output << "cuda_device"
+           << "{"
+           << "index" << device.deviceID() << "name" << device.name() << "compute_capability"
+           << std::to_string(device.majorVersion()) + "." + std::to_string(device.minorVersion()) << "memory_bytes"
+           << std::to_string(device.totalGlobalMem()) << "}";
+#else
+    (void)output;
+    throw std::runtime_error("CUDA requested but this benchmark was built without CUDA support");
+#endif
 }
 
 void write_failure(cv::FileStorage & output, std::size_t index, std::uint64_t time_ns, char const * error)
@@ -325,6 +354,7 @@ void run(char const * input, Profile profile, std::filesystem::path const & dire
            << "compiler" << BENCHMARK_COMPILER << "build_type" << BENCHMARK_BUILD_TYPE << "width"
            << sequence.camera(0).resolution.width << "height" << sequence.camera(0).resolution.height;
     write_options(output, profile.tracking);
+    write_device(output, profile.tracking.orb.execution);
     output << "frames"
            << "[";
     int const failures = workload == "temporal" ? run_temporal(sequence, profile, output, directory)

@@ -26,6 +26,8 @@ class BenchmarkTests(unittest.TestCase):
 
     def native(self, workload):
         raw = {"protocol": benchmark.PROTOCOL, "workload": workload, "execution": "cpu",
+               "adapter": {"wta_k": 2, "patch_size": 31, "edge_threshold": 31,
+                           "score_type": "HARRIS", "descriptor_smoothing": "enabled"},
                "options": dict(self.profile["tracking"]), "frames": []}
         for frame in self.manifest["frames"]:
             result = dict(frame, status="success", frontend_ms=10, geometry_valid=0)
@@ -122,6 +124,39 @@ class BenchmarkTests(unittest.TestCase):
         raw["frames"][0]["observations"].append([20, 20, "1"])
         with self.assertRaisesRegex(ValueError, "observations"):
             self.evaluate(raw)
+
+    def test_cuda_requires_device_identity_and_matching_smoothing(self):
+        for workload in benchmark.WORKLOADS:
+            raw = self.native(workload)
+            raw.update(execution="cuda", cuda_device={"name": "test device"})
+            result, _ = benchmark.evaluate(raw, self.profile, self.manifest, workload, "cuda")
+            self.assertEqual(result["successful_cases"], 3)
+            raw["adapter"]["descriptor_smoothing"] = "disabled"
+            with self.assertRaisesRegex(ValueError, "adapter"):
+                benchmark.evaluate(raw, self.profile, self.manifest, workload, "cuda")
+            raw["adapter"]["descriptor_smoothing"] = "enabled"
+            for device in ({}, None, [], {"name": " "}):
+                raw["cuda_device"] = device
+                with self.assertRaisesRegex(ValueError, "device identity"):
+                    benchmark.evaluate(raw, self.profile, self.manifest, workload, "cuda")
+
+    def test_cuda_failure_does_not_retry_on_cpu(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            for workload in benchmark.WORKLOADS:
+                # Initialization can leave a header without frames; preserve the native error.
+                (directory / f"{workload}.json").write_text("{}")
+                process = benchmark.subprocess.CompletedProcess([], 1, "", "CUDA unavailable")
+                with mock.patch.object(benchmark.subprocess, "run", return_value=process) as run, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    result, rows = benchmark.execute_workload(Path("orb_benchmark"), Path("dataset"),
+                        Path("profile.json"), directory, workload, "cuda", self.profile, self.manifest)
+                run.assert_called_once()
+                self.assertEqual(run.call_args.args[0][-2:], [workload, "--cuda"])
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["error"], "CUDA unavailable")
+                self.assertEqual(result["successful_cases"], 0)
+                self.assertTrue(all(row["status"] == "missing" for row in rows))
 
     def test_invalid_warmup_timing_is_not_ignored(self):
         raw = self.native("temporal")
