@@ -1,0 +1,280 @@
+/*
+ * formal-gvins is licensed under the Apache License, Version 2.0.
+ * See LICENSE for usage and redistribution terms.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+/**
+ * @file
+ * Fixed-size matrix value type shared by all linear algebra backends.
+ */
+
+#include <cstddef>
+
+namespace formal_gvins::linalg
+{
+
+namespace detail
+{
+class MatrixAccess;
+} /* end namespace detail */
+
+/**
+ * Fixed-size matrix whose storage and primitive operations are supplied by a
+ * compile-time linear algebra backend.
+ *
+ * All arithmetic operators evaluate eagerly and return an owning value.
+ * Coefficient access uses zero-based indices and requires valid bounds.
+ */
+template <typename Linalg, std::size_t Rows, std::size_t Columns> class Matrix
+{
+
+    static_assert(Rows > 0U);
+    static_assert(Columns > 0U);
+
+public:
+    using value_type = typename Linalg::value_type;
+    using linalg_type = Linalg;
+
+    static constexpr std::size_t row_count = Rows;
+    static constexpr std::size_t column_count = Columns;
+
+    Matrix() { Linalg::template set_zero<Rows, Columns>(m_storage); }
+    Matrix(Matrix const & other) = default;
+    Matrix(Matrix && other) = default;
+    Matrix & operator=(Matrix const & other) = default;
+    Matrix & operator=(Matrix && other) = default;
+    ~Matrix() = default;
+
+    /** Return a zero matrix. */
+    static Matrix zero() { return Matrix(); }
+
+    /** Return an identity matrix.  This function is available only for square matrices. */
+    static Matrix identity();
+
+    /** Construct a matrix from coefficients in row-major mathematical order. */
+    static Matrix from_row_major(value_type const (&coefficients)[Rows * Columns]);
+
+    /** Access a coefficient.  The caller must prove row < Rows and column < Columns. */
+    value_type operator()(std::size_t row, std::size_t column) const
+    {
+        return Linalg::template coefficient<Rows, Columns>(m_storage, row, column);
+    }
+    value_type & operator()(std::size_t row, std::size_t column)
+    {
+        return Linalg::template coefficient<Rows, Columns>(m_storage, row, column);
+    }
+
+    /** Access a vector coefficient.  This overload is available only when Columns is one. */
+    value_type operator()(std::size_t index) const;
+    value_type & operator()(std::size_t index);
+
+    Matrix operator+(Matrix const & other) const;
+    Matrix operator-(Matrix const & other) const;
+    Matrix operator-() const;
+    Matrix operator*(value_type scalar) const;
+    Matrix operator/(value_type scalar) const;
+
+    template <std::size_t OtherColumns>
+    Matrix<Linalg, Rows, OtherColumns> operator*(Matrix<Linalg, Columns, OtherColumns> const & other) const;
+
+    /** Return a compile-time-positioned block. */
+    template <std::size_t StartRow, std::size_t StartColumn, std::size_t BlockRows, std::size_t BlockColumns>
+    Matrix<Linalg, BlockRows, BlockColumns> block() const;
+
+    /** Replace a compile-time-positioned block.  The block dimensions are deduced. */
+    template <std::size_t StartRow, std::size_t StartColumn, std::size_t BlockRows, std::size_t BlockColumns>
+    void set_block(Matrix<Linalg, BlockRows, BlockColumns> const & source);
+
+    /** Return a compile-time-positioned vector segment. */
+    template <std::size_t Offset, std::size_t SegmentSize> Matrix<Linalg, SegmentSize, 1U> segment() const;
+
+    /** Replace a compile-time-positioned vector segment.  Its size is deduced. */
+    template <std::size_t Offset, std::size_t SegmentSize>
+    void set_segment(Matrix<Linalg, SegmentSize, 1U> const & source);
+
+private:
+    using storage_type = typename Linalg::template storage_type<Rows, Columns>;
+
+    storage_type m_storage;
+
+    template <typename, std::size_t, std::size_t> friend class Matrix;
+    friend class detail::MatrixAccess;
+
+}; /* end class Matrix */
+
+/** Owning column vector; an alias of Matrix, with the same storage and operators. */
+template <typename Linalg, std::size_t Size> using Vector = Matrix<Linalg, Size, 1U>;
+
+namespace detail
+{
+
+// Shared operations access backend storage here without exposing it on Matrix.
+class MatrixAccess
+{
+public:
+    template <typename Linalg, std::size_t Rows, std::size_t Columns>
+    static auto const & storage(Matrix<Linalg, Rows, Columns> const & matrix)
+    {
+        return matrix.m_storage;
+    }
+
+    template <typename Linalg, std::size_t Rows, std::size_t Columns>
+    static auto & storage(Matrix<Linalg, Rows, Columns> & matrix)
+    {
+        return matrix.m_storage;
+    }
+}; /* end class MatrixAccess */
+
+} /* end namespace detail */
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::identity()
+{
+    static_assert(Rows == Columns);
+    Matrix result;
+    for (std::size_t index = 0U; index < Rows; ++index)
+    {
+        result(index, index) = value_type{1};
+    }
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns>
+Matrix<Linalg, Rows, Columns>::from_row_major(value_type const (&coefficients)[Rows * Columns])
+{
+    Matrix result;
+    for (std::size_t row = 0U; row < Rows; ++row)
+    {
+        for (std::size_t column = 0U; column < Columns; ++column)
+        {
+            result(row, column) = coefficients[row * Columns + column];
+        }
+    }
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+typename Matrix<Linalg, Rows, Columns>::value_type Matrix<Linalg, Rows, Columns>::operator()(std::size_t index) const
+{
+    static_assert(Columns == 1U);
+    return (*this)(index, 0U);
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+typename Matrix<Linalg, Rows, Columns>::value_type & Matrix<Linalg, Rows, Columns>::operator()(std::size_t index)
+{
+    static_assert(Columns == 1U);
+    return (*this)(index, 0U);
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::operator+(Matrix const & other) const
+{
+    Matrix result;
+    Linalg::template add<Rows, Columns>(m_storage, other.m_storage, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::operator-(Matrix const & other) const
+{
+    Matrix result;
+    Linalg::template subtract<Rows, Columns>(m_storage, other.m_storage, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::operator-() const
+{
+    Matrix result;
+    Linalg::template negate<Rows, Columns>(m_storage, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::operator*(value_type scalar) const
+{
+    Matrix result;
+    Linalg::template scale<Rows, Columns>(m_storage, scalar, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> Matrix<Linalg, Rows, Columns>::operator/(value_type scalar) const
+{
+    Matrix result;
+    Linalg::template divide<Rows, Columns>(m_storage, scalar, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+template <std::size_t OtherColumns>
+Matrix<Linalg, Rows, OtherColumns>
+Matrix<Linalg, Rows, Columns>::operator*(Matrix<Linalg, Columns, OtherColumns> const & other) const
+{
+    Matrix<Linalg, Rows, OtherColumns> result;
+    Linalg::template multiply<Rows, Columns, OtherColumns>(m_storage, other.m_storage, result.m_storage);
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+template <std::size_t StartRow, std::size_t StartColumn, std::size_t BlockRows, std::size_t BlockColumns>
+Matrix<Linalg, BlockRows, BlockColumns> Matrix<Linalg, Rows, Columns>::block() const
+{
+    static_assert(StartRow < Rows && BlockRows <= Rows - StartRow, "block rows out of bounds");
+    static_assert(StartColumn < Columns && BlockColumns <= Columns - StartColumn, "block columns out of bounds");
+    Matrix<Linalg, BlockRows, BlockColumns> result;
+    for (std::size_t row = 0U; row < BlockRows; ++row)
+    {
+        for (std::size_t column = 0U; column < BlockColumns; ++column)
+        {
+            result(row, column) = (*this)(StartRow + row, StartColumn + column);
+        }
+    }
+    return result;
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+template <std::size_t StartRow, std::size_t StartColumn, std::size_t BlockRows, std::size_t BlockColumns>
+void Matrix<Linalg, Rows, Columns>::set_block(Matrix<Linalg, BlockRows, BlockColumns> const & source)
+{
+    static_assert(StartRow < Rows && BlockRows <= Rows - StartRow, "block rows out of bounds");
+    static_assert(StartColumn < Columns && BlockColumns <= Columns - StartColumn, "block columns out of bounds");
+    for (std::size_t row = 0U; row < BlockRows; ++row)
+    {
+        for (std::size_t column = 0U; column < BlockColumns; ++column)
+        {
+            (*this)(StartRow + row, StartColumn + column) = source(row, column);
+        }
+    }
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+template <std::size_t Offset, std::size_t SegmentSize>
+Matrix<Linalg, SegmentSize, 1U> Matrix<Linalg, Rows, Columns>::segment() const
+{
+    static_assert(Columns == 1U);
+    return block<Offset, 0U, SegmentSize, 1U>();
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+template <std::size_t Offset, std::size_t SegmentSize>
+void Matrix<Linalg, Rows, Columns>::set_segment(Matrix<Linalg, SegmentSize, 1U> const & source)
+{
+    static_assert(Columns == 1U);
+    set_block<Offset, 0U>(source);
+}
+
+template <typename Linalg, std::size_t Rows, std::size_t Columns>
+Matrix<Linalg, Rows, Columns> operator*(typename Matrix<Linalg, Rows, Columns>::value_type scalar,
+                                        Matrix<Linalg, Rows, Columns> const & matrix)
+{
+    return matrix * scalar;
+}
+
+} /* end namespace formal_gvins::linalg */

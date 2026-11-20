@@ -1,0 +1,137 @@
+/*
+ * formal-gvins is licensed under the Apache License, Version 2.0.
+ * See LICENSE for usage and redistribution terms.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+
+/**
+ * @file
+ * Scalar-first unit-quaternion value type.
+ */
+
+#include <formal_gvins/linalg/operations.hpp>
+#include <formal_gvins/scalar/math.hpp>
+#include <formal_gvins/status.hpp>
+
+namespace formal_gvins::so3
+{
+
+/**
+ * Unit quaternion using scalar-first [q0, q1, q2, q3] coefficients and Hamilton
+ * multiplication.
+ *
+ * The ordering corresponds to [qw, qx, qy, qz], and multiplication and
+ * unit-quaternion inversion follow equations (12) and (30) of Joan Sola,
+ * "Quaternion kinematics for the error-state Kalman filter".
+ *
+ * @see https://arxiv.org/abs/1711.02508
+ *
+ * Construction from arbitrary coefficients is checked and normalized.
+ * Arithmetic evaluates eagerly.  Multiplication preserves unit norm over the
+ * mathematical reals; finite-precision residual bounds belong to the selected
+ * numerical profile.
+ */
+template <typename Linalg> class UnitQuaternion
+{
+public:
+    using linalg_type = Linalg;
+    using scalar_math_type = typename Linalg::scalar_math_type;
+    using value_type = typename Linalg::value_type;
+    using vector4_type = linalg::Vector<Linalg, 4U>;
+
+    constexpr UnitQuaternion() = default;
+
+    static constexpr UnitQuaternion identity() { return UnitQuaternion(); }
+
+    [[nodiscard]] static Status from_coefficients(value_type q0, value_type q1, value_type q2, value_type q3,
+                                                  value_type minimum_norm, UnitQuaternion & output);
+
+    [[nodiscard]] static Status from_coefficients(vector4_type const & coefficients, value_type minimum_norm,
+                                                  UnitQuaternion & output);
+
+    constexpr value_type q0() const { return m_q0; }
+    constexpr value_type q1() const { return m_q1; }
+    constexpr value_type q2() const { return m_q2; }
+    constexpr value_type q3() const { return m_q3; }
+
+    vector4_type coefficients() const;
+
+    constexpr UnitQuaternion operator-() const { return UnitQuaternion(-m_q0, -m_q1, -m_q2, -m_q3); }
+    constexpr UnitQuaternion operator*(UnitQuaternion const & other) const;
+    constexpr UnitQuaternion inverse() const { return UnitQuaternion(m_q0, -m_q1, -m_q2, -m_q3); }
+
+private:
+    // Only member operations may construct directly from coefficients.
+    constexpr UnitQuaternion(value_type q0, value_type q1, value_type q2, value_type q3)
+        : m_q0(q0), m_q1(q1), m_q2(q2), m_q3(q3)
+    {
+    }
+
+    value_type m_q0{1};
+    value_type m_q1{0};
+    value_type m_q2{0};
+    value_type m_q3{0};
+}; /* end class UnitQuaternion */
+
+template <typename Linalg>
+Status UnitQuaternion<Linalg>::from_coefficients(value_type q0, value_type q1, value_type q2, value_type q3,
+                                                 value_type minimum_norm, UnitQuaternion & output)
+{
+    return from_coefficients(vector4_type::from_row_major({q0, q1, q2, q3}), minimum_norm, output);
+}
+
+template <typename Linalg>
+Status UnitQuaternion<Linalg>::from_coefficients(vector4_type const & coefficients, value_type minimum_norm,
+                                                 UnitQuaternion & output)
+{
+    if (!scalar::is_finite<scalar_math_type>(minimum_norm))
+    {
+        return Status::non_finite_input;
+    }
+    if (!(minimum_norm > value_type{0}))
+    {
+        return Status::domain_error;
+    }
+
+    vector4_type normalized;
+    Status const status = linalg::normalize(coefficients, minimum_norm, normalized);
+    if (status == Status::zero_or_unsafe_divisor)
+    {
+        return Status::invalid_quaternion_norm;
+    }
+    if (!succeeded(status))
+    {
+        return status;
+    }
+
+    vector4_type const & result = normalized;
+    output.m_q0 = result(0U);
+    output.m_q1 = result(1U);
+    output.m_q2 = result(2U);
+    output.m_q3 = result(3U);
+    return Status::success;
+}
+
+template <typename Linalg> typename UnitQuaternion<Linalg>::vector4_type UnitQuaternion<Linalg>::coefficients() const
+{
+    vector4_type result;
+    result(0U) = m_q0;
+    result(1U) = m_q1;
+    result(2U) = m_q2;
+    result(3U) = m_q3;
+    return result;
+}
+
+template <typename Linalg>
+constexpr UnitQuaternion<Linalg> UnitQuaternion<Linalg>::operator*(UnitQuaternion const & other) const
+{
+    return UnitQuaternion(m_q0 * other.m_q0 - m_q1 * other.m_q1 - m_q2 * other.m_q2 - m_q3 * other.m_q3,
+                          m_q0 * other.m_q1 + m_q1 * other.m_q0 + m_q2 * other.m_q3 - m_q3 * other.m_q2,
+                          m_q0 * other.m_q2 - m_q1 * other.m_q3 + m_q2 * other.m_q0 + m_q3 * other.m_q1,
+                          m_q0 * other.m_q3 + m_q1 * other.m_q2 - m_q2 * other.m_q1 + m_q3 * other.m_q0);
+}
+
+} /* end namespace formal_gvins::so3 */

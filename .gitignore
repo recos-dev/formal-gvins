@@ -1,0 +1,6 @@
+/build/
+/output/
+/tmp/
+__pycache__/
+*.py[cod]
+*.sw*
