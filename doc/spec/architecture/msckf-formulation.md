@@ -96,6 +96,8 @@ persistent landmark states with their own EKF covariance.
 
 ## IMU propagation
 
+### Continuous model
+
 Let $f_m$ and $\omega_m$ be calibrated specific-force and angular-rate
 measurements in $B$. Define $a=f_m-\hat b_a$ and
 $\omega=\omega_m-\hat b_g$. The nominal model is
@@ -155,9 +157,186 @@ P_{CI}^+\Phi^\mathsf T&P_{CC}^+
 $$
 
 Historical nominal poses remain unchanged during propagation. Their correlation
-with the current IMU state does not remain unchanged. The discrete integrator
-and its corresponding transition/noise approximations remain an open decision;
-the integral above is a mathematical definition, not an implemented algorithm.
+with the current IMU state does not remain unchanged.
+
+### Discrete nominal model
+
+The proposed mathematical baseline is zero-order hold (ZOH) of the calibrated
+body-frame IMU inputs over each interval of length $h>0$. Bias means remain
+constant within that interval. This does not assume constant acceleration in
+the world: the rotating body changes the direction of the specific force.
+The acquisition adapter must declare which sample represents each interval.
+Splitting an interval at an image timestamp uses the same held input on its
+two parts; it does not invent an independent IMU measurement.
+
+Write $R=R_{WB}(t_k)$, $\phi=\omega h$, $K=[\phi]_\times$,
+$\theta=\|\phi\|$, and $E(s)=\operatorname{Exp}([\omega]_\times s)$.
+Define
+
+$$
+A_1(h)=\int_0^h E(s)\,ds=h\Gamma_1(\phi),\qquad
+A_2(h)=\int_0^h(h-s)E(s)\,ds=h^2\Gamma_2(\phi),
+$$
+
+$$
+\Gamma_1(\phi)=I+\frac{1-\cos\theta}{\theta^2}K
++\frac{\theta-\sin\theta}{\theta^3}K^2,
+$$
+
+$$
+\Gamma_2(\phi)=\frac12I+\frac{\theta-\sin\theta}{\theta^3}K
++\frac{\theta^2/2+\cos\theta-1}{\theta^4}K^2.
+$$
+
+The continuous extensions are
+$\Gamma_\ell(\phi)=\sum_{i=0}^{\infty}K^i/(i+\ell)!$ for $\ell=1,2$.
+Use these limits near zero, rather than evaluating cancelling quotients.
+The exact solution of the held-input nominal ODE is
+
+$$
+\begin{aligned}
+\hat p_{k+1}^-&=\hat p_k^++\hat v_k^+h+R A_2(h)a+\tfrac12g_Wh^2,\\
+\hat v_{k+1}^-&=\hat v_k^++R A_1(h)a+g_Wh,\\
+\hat q_{k+1}^-&=\hat q_k^+\otimes\operatorname{Exp}_q(\omega h),\\
+\hat b_{a,k+1}^-&=\hat b_{a,k}^+,\qquad
+\hat b_{g,k+1}^-=\hat b_{g,k}^+ .
+\end{aligned}
+$$
+
+Position uses the interval's initial velocity. At $\omega=0$,
+$A_1=hI$ and $A_2=h^2I/2$, recovering constant-acceleration integration.
+"Exact" here is conditional on ZOH, not a claim that real IMU inputs are constant
+or that floating-point evaluation has no error. This is a project derivation
+under the declared conventions; analytical IMU integration is also discussed
+in [8].
+
+### Transition of the held-input model
+
+The angular-rate bias affects translation during rotation. Define its two
+translation sensitivities using the right Jacobian from the reset section:
+
+$$
+\begin{aligned}
+B_1(h)&=\int_0^h E(s)[a]_\times J_r(\omega s)s\,ds,\\
+B_2(h)&=\int_0^h(h-s)E(s)[a]_\times J_r(\omega s)s\,ds.
+\end{aligned}
+$$
+
+Indeed,
+$D_{b_g}(E(s)a)=E(s)[a]_\times J_r(\omega s)s$ and
+$D_{b_a}(E(s)a)=-E(s)$. The ordinary transition, before the FEJ modification
+defined later, is
+
+$$
+\Phi^{\mathrm{ZOH}}=
+\begin{bmatrix}
+I&hI&-R[A_2a]_\times&-RA_2&RB_2\\
+0&I&-R[A_1a]_\times&-RA_1&RB_1\\
+0&0&E(h)^\mathsf T&0&-hJ_r(\phi)\\
+0&0&0&I&0\\
+0&0&0&0&I
+\end{bmatrix}.
+$$
+
+This is both the derivative of the discrete nominal map and the transition of
+its continuous first-order error ODE. It is not $I+F_I(t_k)h$.
+At zero angular rate,
+$B_1=h^2[a]_\times/2$ and $B_2=h^3[a]_\times/6$; the gyro-bias translation
+blocks generally remain nonzero. The following constant-matrix construction
+also evaluates the complete transition, without leaving these integrals as
+undefined operations.
+
+### Matched process-noise covariance
+
+Assume $Q_c$ is constant over the interval. Rotate only position and velocity
+errors into the instantaneous nominal body frame:
+
+$$
+\eta=D(s)\delta x_I,\qquad
+D(s)=\operatorname{diag}(R(s)^\mathsf T,R(s)^\mathsf T,I,I,I),
+\quad R(s)=RE(s).
+$$
+
+With $W=[\omega]_\times$, the transformed system has constant matrices:
+
+$$
+\dot\eta=A\eta+Bn,\qquad
+A=\begin{bmatrix}
+-W&I&0&0&0\\
+0&-W&-[a]_\times&-I&0\\
+0&0&-W&0&-I\\
+0&0&0&0&0\\
+0&0&0&0&0
+\end{bmatrix},\qquad
+B=\begin{bmatrix}
+0&0&0&0\\
+-I&0&0&0\\
+0&-I&0&0\\
+0&0&I&0\\
+0&0&0&I
+\end{bmatrix}.
+$$
+
+Consequently, one finite matrix exponential gives an exact reference evaluation
+for this linearized ZOH/noise model [9]:
+
+$$
+\exp\!\left(h
+\begin{bmatrix}A&BQ_cB^\mathsf T\\0&-A^\mathsf T\end{bmatrix}\right)
+=\begin{bmatrix}U&V\\0&U^{-\mathsf T}\end{bmatrix},
+$$
+
+$$
+\Phi^{\mathrm{ZOH}}=D(h)^{-1}UD(0),\qquad
+Q_d=D(h)^{-1}VU^\mathsf T D(h)^{-\mathsf T}.
+$$
+
+$D^{-1}=D^\mathsf T$. The construction supports anisotropic densities and
+specified cross-correlations; it does not assume that every noise block is
+$\sigma^2I$. The original integral establishes $Q_d\succeq0$ when
+$Q_c\succeq0$. A computed matrix exponential still needs numerical error checks.
+
+For example, with $\omega=0$, only accelerometer white noise of body-frame
+density $S_a$, and all other driving densities zero, put $S_W=RS_aR^\mathsf T$.
+Then
+
+$$
+Q_{pp}=\tfrac13S_Wh^3,\qquad
+Q_{pv}=Q_{vp}^\mathsf T=\tfrac12S_Wh^2,\qquad Q_{vv}=S_Wh.
+$$
+
+Replacing this by a single constant random acceleration of variance $S_a/h$
+would instead give $Q_{pp}=S_Wh^3/4$. Those are different stochastic models,
+even though their velocity variances agree. Bias random walks also create
+cross-covariances during the interval; adding only bias diagonal terms omits them.
+
+The $30\times30$ exponential is a reference/oracle, not a required flight-time
+implementation. A bounded positive-weight quadrature is a possible production
+evaluation of the same integral:
+
+$$
+Q_d^{\mathrm{quad}}=h\sum_i w_i\,C(s_i)Q_cC(s_i)^\mathsf T,\qquad
+C(s)=\Phi^{\mathrm{ZOH}}(h,s)G_I(s),\quad w_i>0.
+$$
+
+For three-point Gauss--Legendre quadrature, $s_i/h$ are
+$1/2-\sqrt{15}/10,\ 1/2,\ 1/2+\sqrt{15}/10$, with weights
+$5/18,\ 4/9,\ 5/18$. It preserves exact PSD and has local quadrature error
+$O(h^7)$ for a smooth integrand with bounded derivatives. This is not a
+uniform floating-point bound or a selection of production order/tolerances.
+The accepted interval/rate domain and numerical implementation need separate
+review against the reference.
+
+Across independent continuous-white-noise intervals, compose in time order:
+
+$$
+\Phi_{20}=\Phi_{21}\Phi_{10},\qquad
+Q_{20}=\Phi_{21}Q_{10}\Phi_{21}^\mathsf T+Q_{21}.
+$$
+
+Do not independently inject a full interval's noise twice when subdividing at
+an exposure time. Correlated sample errors or an IMU providing integrated
+increments require their own acquisition/noise model.
 
 ## Clone augmentation
 
@@ -227,8 +406,29 @@ Insert $H_{c_j}$ in the corresponding clone columns of the complete Jacobian;
 the other direct state columns are zero for fixed calibration. Cross-covariance
 still allows the measurement to correct current velocity, attitude and biases.
 
-Estimate the feature temporarily by multi-view triangulation, with optional
-bounded refinement of
+To initialize the temporary feature, convert each undistorted pixel
+$z=[z_x,z_y]^\mathsf T$ to a camera bearing and write its world-frame
+camera center:
+
+$$
+d_{cj}=\begin{bmatrix}(z_x-c_x)/f_x\\(z_y-c_y)/f_y\\1\end{bmatrix},
+\qquad c_{cj}=\hat p_{WB_j}+\hat R_{WB_j}p_{BC_c},
+\qquad R_{C_cW_j}=R_{BC_c}^\mathsf T\hat R_{WB_j}^\mathsf T.
+$$
+
+Collinearity gives
+
+$$
+A_{cj}p_f^W=b_{cj},\qquad
+A_{cj}=[d_{cj}]_\times R_{C_cW_j},\qquad b_{cj}=A_{cj}c_{cj}.
+$$
+
+Each three-row block has only two independent rows. Stack views and solve the
+overdetermined system using rank-revealing QR or SVD. This algebraic solution is
+an initializer, not a pixel-noise maximum-likelihood estimate; pure rotation
+or insufficient baseline can leave depth unobservable.
+
+Optionally refine the point with a bounded number of iterations on
 
 $$
 \hat p_f^W\approx\arg\min_p
@@ -237,7 +437,13 @@ $$
 
 This equation defines an objective, not guaranteed convergence or a globally
 optimal solution. Positive depth, adequate parallax and conditioning require
-explicit acceptance bounds. At chosen nominal/feature linearization points,
+explicit acceptance bounds. For fixed poses, a Gauss--Newton step solves
+$\min_{\Delta p}\|L^{-1}(r_f-H_f\Delta p)\|^2$ and proposes
+$p_f\leftarrow p_f+\Delta p$, with $V_f=LL^\mathsf T$.
+Here $H_f$ is the current geometric derivative, not the later FEJ factor.
+Invalid steps or a failed convergence/geometry criterion do not produce a usable
+feature. Damping, step acceptance and iteration limits belong to the numerical
+profile. At chosen nominal/feature linearization points,
 stacking the feature's $m$ two-dimensional observations gives
 
 $$
@@ -246,8 +452,10 @@ r_f=z_f-h_f(\hat x,\hat p_f)
 \quad H_x\in\mathbb R^{2m\times D},\quad H_f\in\mathbb R^{2m\times3}.
 $$
 
-These are ordinary differential Jacobians. An FEJ implementation must specify
-which estimates evaluate each factor; that policy is not fixed by this equation.
+These are ordinary differential Jacobians at a common linearization point.
+The FEJ section below specifies the frozen points and coordinate transport used
+instead in the proposed consistency-aware update. Residuals still use current
+estimates; the resulting FEJ model is an intentional linearization approximation.
 
 ## Feature elimination, gating and compression
 
@@ -281,6 +489,21 @@ precision, orthogonality and annihilation require residual bounds rather than
 exact coefficient equality. QR can apply orthogonal transforms implicitly;
 an explicit dense nullspace matrix is not required.
 
+For full-column-rank $\tilde H_f$, this elimination has a precise least-squares
+meaning. For any fixed $\delta x$, set $b=\tilde r-\tilde H_x\delta x$. Then
+
+$$
+\min_{\delta p_f}\|b-\tilde H_f\delta p_f\|^2
+=b^\mathsf T\Pi b=\|U^\mathsf Tb\|^2,\qquad
+\Pi=I-\tilde H_f(\tilde H_f^\mathsf T\tilde H_f)^{-1}\tilde H_f^\mathsf T
+=UU^\mathsf T.
+$$
+
+The inverse expresses the identity; a production implementation uses orthogonal
+factorization. This removes a nuisance parameter with no independent landmark
+prior. Do not add the triangulated point as another independent measurement:
+it was estimated from these same image observations.
+
 The proposed joint innovation gate for each feature is
 
 $$
@@ -300,6 +523,13 @@ Optional orthogonal row compression retains the informative rows of $Q^\mathsf T
 and the matching rows of $Q^\mathsf Tr$, with identity noise covariance. Perform
 the feature gate before this compression; discarded state-insensitive residual
 components still contain goodness-of-fit information.
+
+More explicitly, if an orthogonal $Q=[Q_1,Q_2]$ gives $Q_2^\mathsf TH=0$, use
+$H_c=Q_1^\mathsf TH$ and $r_c=Q_1^\mathsf Tr$. Then
+$H_c^\mathsf TH_c=H^\mathsf TH$ and
+$H_c^\mathsf Tr_c=H^\mathsf Tr$. Compression preserves the state-dependent
+linear Gaussian likelihood. Dropping merely small rows is an additional
+approximation requiring a rank/error criterion, not this exact identity.
 
 ## Joint correction, injection and reset
 
@@ -352,6 +582,22 @@ distribution transformation. Floating-point quaternion normalization and its
 residual bounds require a numerical contract. A failed correction or injection
 must not publish a partially updated joint state/covariance.
 
+For one attitude, the derivative follows directly from
+
+$$
+\delta\theta^+
+=\operatorname{Log}\!\left(
+\operatorname{Exp}(-[\widehat{\delta\theta}]_\times)
+\operatorname{Exp}([\delta\theta]_\times)\right),\qquad
+\left.\frac{\partial\delta\theta^+}{\partial\delta\theta}
+\right|_{\delta\theta=\widehat{\delta\theta}}=J_r(\widehat{\delta\theta}).
+$$
+
+Every block touching a corrected attitude must be transported, including
+IMU/clone and clone/clone cross-covariances. Resetting only attitude diagonal
+blocks is incorrect. The FEJ linearization coordinates must also be transported,
+as specified below.
+
 ## Clone removal and execution order
 
 After processing the relevant constraints, select retained error coordinates
@@ -368,39 +614,221 @@ remain present.
 
 The proposed image-update sequence is:
 
-1. Validate time/association and propagate the joint state to the image timestamp.
-2. Augment its IMU pose clone and append frontend observations to feature tracks.
+1. Validate time/association and propagate the joint state to the image timestamp,
+   applying the FEJ transition and establishing the new IMU first estimate.
+2. Augment its IMU pose clone, first estimate and coordinate map; append frontend
+   observations to feature tracks.
 3. Select eligible tracks, including those affected by impending clone removal.
 4. Triangulate, check geometry, build/whiten residuals, eliminate feature error,
    gate and optionally compress accepted constraints.
-5. Correct, inject and reset the complete joint estimate.
+5. Correct, inject and reset the complete joint estimate and FEJ coordinate maps.
 6. Mark consumed observations, retire obsolete records and remove eligible clones.
 
-Observation reuse and failure/retry behavior need an explicit transaction policy.
-The same pixel measurement must not be fused again as independent evidence.
-Feature IDs, camera IDs and timestamps must resolve to the intended live clone;
-slot reuse alone is not a valid association. Capacity overflow must not silently
-overwrite poses or IMU samples still required by pending observations.
+Following [V-TRACK](../requirements/vision/feature-tracks.md), commit the corrected
+joint estimate, covariance, FEJ coordinate maps and observation-consumption
+records together. A numerical failure leaves that correction transaction's
+inputs unchanged; earlier successful propagation is a separate operation.
+An explicitly rejected/retired observation is not a successfully fused one.
+If no track is accepted, skip correction/reset and apply only the declared
+retirement/removal policy.
+
+The same pixel must not be fused again as independent evidence, even if its
+track or descriptor is retained for a separate map. Feature, camera and image
+identities must resolve to the intended live clone; slot reuse alone is not an
+association. Capacity overflow must not silently overwrite poses or IMU samples
+still required by pending observations. Retry, overflow and clone-selection
+policies remain runtime decisions.
 
 ## Consistency and linearization
 
-Pure VIO with known gravity has global-translation and global-yaw gauge freedoms
-under ordinary nondegenerate motion. Additional degeneracies may occur. A
-consistency-aware linearization must preserve these freedoms rather than create
-spurious information. For compatible gauge bases $N_k$, the relevant conditions
-include
+### Four gauge directions
+
+Let $u=g_W/\|g_W\|$. A common translation $t$ and rotation
+$S=\operatorname{Exp}(\psi[u]_\times)$ act on the trajectory and features as
+$p'=Sp+t$, $v'=Sv$, $R'=SR$, $p_f'=Sp_f+t$. Gravity and body-frame biases
+are unchanged. These transformations leave the IMU/visual model unchanged.
+Thus pure VIO has three global-translation and one global-yaw gauge directions.
+Degenerate motion can introduce additional unobservable directions.
 
 $$
-H_kN_k=0,\qquad \bar\Phi_{k+1,k}N_k=N_{k+1},
+N_I(x)=
+\begin{bmatrix}
+I&[u]_\times p\\
+0&[u]_\times v\\
+0&R^\mathsf Tu\\
+0&0\\
+0&0
+\end{bmatrix},\qquad
+N_{c_j}(x)=
+\begin{bmatrix}I&[u]_\times p_j\\0&R_j^\mathsf Tu\end{bmatrix},\qquad
+N_f(p_f)=\begin{bmatrix}I&[u]_\times p_f\end{bmatrix}.
 $$
 
-where $H_k$ is the feature-eliminated visual Jacobian and
-$\bar\Phi=\operatorname{diag}(\Phi,I_{6N})$ is the joint transition between state
-changes. Augmentation/removal/reset transform the basis as the state coordinates
-change. FEJ is the proposed approach [7], but its exact first-estimate retention
-and evaluation rules must be derived for this right-local formulation. Freezing
-arbitrary Jacobian terms or copying OpenVINS signs does not establish consistency.
-GNSS aiding changes observability and requires a separate analysis.
+Stack $N_I,N_{c_1},\ldots,N_{c_N}$ vertically to obtain $N\in\mathbb R^{D\times4}$.
+At a single common nominal point the ordinary derivatives satisfy
+
+$$
+H_xN+H_fN_f=0,\qquad
+\Phi^{\mathrm{ZOH}}N_I(x_k)=N_I(x_{k+1}^-).
+$$
+
+The first identity follows already before projection:
+$-R_j^\mathsf T[u]_\times p_j+
+[s_j]_\times R_j^\mathsf Tu+
+R_j^\mathsf T[u]_\times p_f=0$.
+Whitening and eliminating the feature therefore give $H_oN=0$.
+These single-step identities alone do not establish multi-update consistency:
+replacing old linearization points after every correction changes the basis
+used by successive constraints [7].
+
+### First estimates and their lifetime
+
+Use a superscript $0$ for first-estimate values, distinct from the corrected
+nominal estimate denoted by a hat. The proposed FEJ policy is:
+
+| Quantity | First estimate and lifetime | Use |
+|---|---|---|
+| Current IMU $p^0,v^0,R^0$ | Initialize from the starting nominal state; set to its newly propagated nominal value at each new time, before correction there; hold through corrections at that same time. | Previous endpoint of the next FEJ transition. |
+| Clone $p_j^0,R_j^0$ | Copy the current IMU's first estimate when cloned; keep until clone removal. | All visual Jacobians involving that clone. |
+| Temporary feature $p_f^0$ | Use one triangulated estimate when assembling its candidate constraint; hold for every row of that assembly. | All factors of $H_x^0,H_f^0$ for that constraint. |
+| Bias means and held IMU inputs | Use current corrected bias means and the declared interval input. | Nominal propagation and physical noise/other bias sensitivity blocks. |
+| Calibration and gravity | Fixed profile constants. | Nominal model, residuals and Jacobians. |
+
+Compute $r_f=z_f-h_f(\hat x,\hat p_f)$ at the current nominal poses and temporary
+feature estimate. Compute every geometric factor of $H_x^0,H_f^0$, including
+$J_\pi$, at $(p_j^0,R_j^0,p_f^0)$; mixing a current feature with different
+per-row frozen features breaks the cancellation. Both current and frozen
+projections need valid depth/domain. A rebuilt candidate rebuilds all its rows
+at a common feature point; it cannot mix old factors with a new point.
+These temporary features are not persistent EKF landmarks.
+
+FEJ deliberately uses a Jacobian different from the derivative at the current
+residual evaluation point. The equalities below concern that chosen linear
+system; they do not remove its nonlinear linearization error.
+
+### FEJ transition
+
+Starting from $\Phi^{\mathrm{ZOH}}$ evaluated at the current corrected IMU state,
+define $\Phi^0$ by replacing exactly three attitude-column blocks:
+
+$$
+\begin{aligned}
+\Phi^0_{\theta\theta}&=(R_{k+1}^0)^\mathsf T R_k^0,\\
+\Phi^0_{v\theta}&=-[v_{k+1}^0-v_k^0-g_Wh]_\times R_k^0,\\
+\Phi^0_{p\theta}&=-[p_{k+1}^0-p_k^0-v_k^0h-\tfrac12g_Wh^2]_\times R_k^0.
+\end{aligned}
+$$
+
+Keep the remaining blocks as specified by the physical ZOH transition.
+Bias columns do not enter the gauge identities because the gauge has zero bias
+components. Substitution gives
+
+$$
+\Phi^0N_I(x_k^0)=N_I(x_{k+1}^0).
+$$
+
+For example, the velocity yaw column becomes
+$[u]_\times v_k^0-[v_{k+1}^0-v_k^0-g_Wh]_\times u
+=[u]_\times v_{k+1}^0$, since $g_W$ is parallel to $u$.
+The position identity follows in the same way, including the $hI$ velocity
+block. Without intervening corrections these three blocks reduce to the
+ordinary ZOH derivatives.
+
+This is a first-estimate endpoint construction adapted to our convention from
+the FEJ principle [7,8]. When first and current estimates differ, $\Phi^0$ is
+not the derivative of the current nominal map. The process-noise covariance
+still uses the physical ZOH integral, evaluated along the propagated nominal
+trajectory. The resulting FEJ pair is a specified approximation: do not claim
+that the modified $\Phi^0$ and unchanged $Q_d$ are jointly the exact transition
+and noise of the original continuous error ODE.
+
+### Transport through right-local resets
+
+Frozen points alone are insufficient when retaining the explicit $J_r$ reset
+above. A frozen Jacobian has columns in its reference linear-error coordinates,
+whereas $P$ after reset describes new current-local coordinates. The proposed
+adaptation keeps their change of basis explicit:
+
+$$
+\delta x=T e,\qquad
+T=\operatorname{diag}(I,I,T_I,I,I,I,T_1,\ldots,I,T_N).
+$$
+
+Here $e$ is the FEJ linear model's reference error, not a finite difference
+$x-x^0$. Each $T_a$ is a $3\times3$ attitude-coordinate map, initially $I$.
+Only one joint covariance is needed: $P$ remains in current-local coordinates.
+No additional physical state or independent uncertainty is introduced.
+Only the $3\times3$ maps need storage, not a dense $D\times D$ matrix.
+The gauge basis $N$ is an analysis object, not a required runtime state.
+
+For an observation use
+
+$$
+H_x=H_x^0T^{-1},\qquad H_f=H_f^0,\qquad N=T N^0,\quad N^0=N(x^0).
+$$
+
+Implement the inverse action by small solves. After injection/reset, leave
+the first-estimate values unchanged and update
+
+$$
+T^+=GT^-,\qquad N^+=GN^- .
+$$
+
+This is the coordinate transport of a fixed linear model:
+$H^{0}(T^+)^{-1}N^+=H^{0}(T^-)^{-1}N^-$.
+It is not permission to replace $T_a$ by
+$R(\hat q_a)^\mathsf T R(q_a^0)$; a finite rotation and a reset derivative
+are different maps.
+
+At the next IMU propagation, the new endpoint is its first estimate, so set
+$T_{I,k+1}^-=I$ there. Retain each clone's $T_j$. The actual joint transition
+in current-local coordinates is
+
+$$
+\bar\Phi_{\mathrm{use}}
+=T_{k+1}^-\operatorname{diag}(\Phi^0,I_{6N})(T_k^+)^{-1}.
+$$
+
+Its clone block is identity. Use its IMU block and the physical $Q_d$ in the
+joint covariance propagation above; the noise is already in the new endpoint's
+local coordinates. If representing it in another basis, transform the noise
+by the same congruence as the covariance.
+
+At augmentation, copy the selected current pose's first estimates and $T_I$
+into the new clone; retain the existing $J_c$ covariance formula.
+At removal, delete the corresponding first estimates and coordinate-map block.
+These rules make propagation, augmentation and removal agree with the same
+linearized gauge representation.
+
+This reset-aware transport is a project design proposal derived here, not a
+claim that OpenVINS implements these extra maps. Its nonsingular, adequately
+conditioned domain, correction-size limit and response to an ill-conditioned
+map need acceptance bounds. Silently discarding $T$ or refreshing frozen clone
+points would change the estimator. The algebra establishes coordinate/gauge
+compatibility, not statistical consistency under arbitrary corrections.
+
+### Composition and scope of the consistency claim
+
+For the feature-eliminated Jacobian in current-local coordinates and the
+declared propagation, the algebraic obligations are
+
+$$
+H_oN=0,\qquad
+\bar\Phi_{\mathrm{use}}N_k=N_{k+1},\qquad
+(I-KH_o)N=N .
+$$
+
+Whitening and row compression preserve the first identity. With
+$A_c=[I;J_c]$, augmentation maps $N$ to $A_cN$; reset maps it to $GN$;
+removal maps it to $EN$. Chaining these identities prevents these visual
+constraints from adding direct information in the selected four gauge
+directions of the linear model.
+
+It does not require four zero eigenvalues in $P$, promise constant marginal
+yaw variance, or prove estimator accuracy. Initialization priors, correlations,
+nonlinear errors, numerical errors, data-dependent outlier selection and
+additional degeneracies still matter. GNSS, absolute-heading sensors or map
+feedback change the information/gauge model and need separate derivations.
 
 ## Implementation and verification boundary
 
@@ -408,17 +836,19 @@ The imported [linalg](../../../include/formal_gvins/linalg/linalg.hpp),
 [scalar](../../../include/formal_gvins/scalar/math.hpp) and
 [SO(3)](../../../include/formal_gvins/so3/so3.hpp) layers provide numerical
 primitives. They do not yet provide active-size joint matrices, QR/nullspace
-operations, an MSCKF state or a feature frontend. Eigen and CMSIS-DSP are backend
+operations, general coordinate-map solves, an MSCKF state or a feature frontend.
+The existing SPD solve cannot directly solve a nonsymmetric $T_a$.
+Eigen and CMSIS-DSP are backend
 choices; their external internals are not proved by shared mathematical theorems.
 
 | Boundary | Intended evidence, not completed proof |
 |---|---|
-| Frames, IMU model and joint propagation | Exact derivation; discretization/noise consistency; covariance symmetry/PSD under stated premises. |
+| Frames, IMU model and joint propagation | ZOH nominal/transition derivative; matched white-noise integral; interval composition; covariance symmetry/PSD under stated premises. |
 | Augmentation and marginalization | Index/state correspondence, full cross-covariances and preservation of exact PSD. |
 | Camera geometry and Jacobians | Derivative proofs, finite-difference cross-checks, depth/domain and calibration-coordinate checks. |
 | Whitening, feature elimination and compression | Exact orthogonality/information properties; scoped rank, conditioning and floating-point residual bounds. |
 | Correction and all-pose reset | Kalman/Joseph identities, right-local reset derivative, covariance transport and failure atomicity. |
-| FEJ and observability | Preservation of the appropriate gauge subspace across propagation, update and state changes. |
+| FEJ and observability | Endpoint gauge identities; frozen visual-factor cancellation; coordinate transport through propagation, correction/reset, augmentation and removal. |
 | Track/clone lifecycle and resources | Bounded indexing/storage, valid time/identity association, once-only fusion and target timing/workspace measurements. |
 
 Lean can address exact algebra and geometric properties. Scoped C++ verification
@@ -431,10 +861,10 @@ of the assembled estimator or of visual-feature correctness.
 
 | Decision | What must be fixed |
 |---|---|
-| Discrete propagation | Integration scheme, IMU interval semantics and matched $\Phi,Q_d$ approximation. |
+| Propagation implementation | Bind acquisition/interval semantics to the ZOH proposal; select bounded evaluation of $B_1,B_2,Q_d$, small-angle branches, error limits and timing/workspace budgets. |
 | Vision profile | Actual camera/distortion model, mono/stereo configuration, synchronization accuracy and track-noise assumptions. |
 | Geometry and innovation acceptance | Depth/parallax/conditioning limits, rank tolerance, triangulation iteration cap and gate confidence. |
-| Consistency | FEJ variables, cache lifetime and propagation/update/reset linearization rules for these conventions. |
+| Consistency acceptance | Review the proposed FEJ endpoint/coordinate-transport design; set correction and conditioning limits, then evaluate statistical consistency as well as the algebraic gauge identities. |
 | Capacity and failure | Maximum clones/tracks/observations, workspace ownership, retirement policy and complete failure/retry semantics. |
 | Initialization and recovery | Gravity/yaw initialization, bias priors, insufficient-motion handling and loss/reacquisition behavior. |
 | GNSS extension | PVT versus raw observations, world/geodetic alignment, antenna lever arm, clocks, timing and correlation handling. |
@@ -448,6 +878,8 @@ of the assembled estimator or of visual-feature correctness.
 5. OpenVINS, [camera measurement model](https://docs.openvins.com/update-feat.html) and [feature triangulation](https://docs.openvins.com/update-featinit.html).
 6. OpenVINS, [nullspace projection](https://docs.openvins.com/update-null.html) and [MSCKF update](https://docs.openvins.com/classov__msckf_1_1UpdaterMSCKF.html).
 7. OpenVINS, [First-Estimate Jacobians](https://docs.openvins.com/fej.html).
+8. OpenVINS, [analytical propagation](https://docs.openvins.com/propagation_analytical.html), especially mean integration, error-state evolution and the FEJ endpoint discussion. The state order, rotation convention, gravity sign and noise discretization here are defined locally, not copied from that implementation.
+9. Charles F. Van Loan, [Computing Integrals Involving the Matrix Exponential](https://doi.org/10.1109/TAC.1978.1101743), IEEE Transactions on Automatic Control, 23(3):395--404, 1978. The block-exponential construction is applied here to the transformed constant-coefficient error system.
 
 OpenVINS documentation was consulted on 2026-11-20. Its URLs are explanatory
 references, not a pinned implementation baseline or a claim of behavioral identity.
