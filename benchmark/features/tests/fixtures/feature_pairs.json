@@ -1,0 +1,109 @@
+{
+  "protocol": "projected-pairs-v1",
+  "cases": [
+    {
+      "id": "exact-pairs",
+      "projected_source": [[0, 0, true], [10, 0, true]],
+      "target": [[0, 0, true], [10, 0, true]],
+      "matches": [[0, 0], [1, 1]],
+      "tolerance_px": 0,
+      "expected": {
+        "eligible_source_points": 2, "eligible_target_points": 2,
+        "geometric_pairs": 2, "accepted_pairs": 2, "correct_pairs": 2, "evaluated_pairs": 2,
+        "repeatability": 1, "precision": 1, "recall": 1,
+        "rmse_all_px": 0, "rmse_correct_px": 0
+      }
+    },
+    {
+      "id": "mixed-pairs-at-threshold",
+      "projected_source": [[0, 0, true], [10, 0, true], [20, 0, true]],
+      "target": [[3, 4, true], [10, 0, true], [30, 0, true]],
+      "matches": [[0, 0], [1, 1], [2, 2]],
+      "tolerance_px": 5,
+      "expected": {
+        "eligible_source_points": 3, "eligible_target_points": 3,
+        "geometric_pairs": 2, "accepted_pairs": 3, "correct_pairs": 2, "evaluated_pairs": 3,
+        "repeatability": 0.6666666666666666, "precision": 0.6666666666666666, "recall": 1,
+        "rmse_all_px": 6.454972243679028, "rmse_correct_px": 3.5355339059327378
+      }
+    },
+    {
+      "id": "augmenting-path-required",
+      "projected_source": [[0, 0, true], [-0.5, 0, true]],
+      "target": [[0, 0, true], [0.5, 0, true]],
+      "matches": [[0, 1], [1, 0]],
+      "tolerance_px": 0.6,
+      "expected": {
+        "eligible_source_points": 2, "eligible_target_points": 2,
+        "geometric_pairs": 2, "accepted_pairs": 2, "correct_pairs": 2, "evaluated_pairs": 2,
+        "repeatability": 1, "precision": 1, "recall": 1,
+        "rmse_all_px": 0.5, "rmse_correct_px": 0.5
+      }
+    },
+    {
+      "id": "competing-source-detections",
+      "projected_source": [[0, 0, true], [0.5, 0, true]],
+      "target": [[0, 0, true], [100, 0, true]],
+      "matches": [[0, 0]],
+      "tolerance_px": 1,
+      "expected": {
+        "eligible_source_points": 2, "eligible_target_points": 2,
+        "geometric_pairs": 1, "accepted_pairs": 1, "correct_pairs": 1, "evaluated_pairs": 1,
+        "repeatability": 0.5, "precision": 1, "recall": 1,
+        "rmse_all_px": 0, "rmse_correct_px": 0
+      }
+    },
+    {
+      "id": "reference-ineligible-pair",
+      "projected_source": [[0, 0, true], [1, 0, false], [2, 0, true]],
+      "target": [[0, 0, true], [1, 0, false], [2, 0, true]],
+      "matches": [[0, 0], [1, 1], [2, 2]],
+      "tolerance_px": 0,
+      "expected": {
+        "eligible_source_points": 2, "eligible_target_points": 2,
+        "geometric_pairs": 2, "accepted_pairs": 3, "correct_pairs": 2, "evaluated_pairs": 2,
+        "repeatability": 1, "precision": 0.6666666666666666, "recall": 1,
+        "rmse_all_px": 0, "rmse_correct_px": 0
+      }
+    },
+    {
+      "id": "no-accepted-pairs",
+      "projected_source": [[0, 0, true]],
+      "target": [[0, 0, true]],
+      "matches": [],
+      "tolerance_px": 1,
+      "expected": {
+        "eligible_source_points": 1, "eligible_target_points": 1,
+        "geometric_pairs": 1, "accepted_pairs": 0, "correct_pairs": 0, "evaluated_pairs": 0,
+        "repeatability": 1, "precision": null, "recall": 0,
+        "rmse_all_px": null, "rmse_correct_px": null
+      }
+    },
+    {
+      "id": "no-geometric-pairs",
+      "projected_source": [[0, 0, true]],
+      "target": [[10, 0, true]],
+      "matches": [[0, 0]],
+      "tolerance_px": 1,
+      "expected": {
+        "eligible_source_points": 1, "eligible_target_points": 1,
+        "geometric_pairs": 0, "accepted_pairs": 1, "correct_pairs": 0, "evaluated_pairs": 1,
+        "repeatability": 0, "precision": 0, "recall": null,
+        "rmse_all_px": 10, "rmse_correct_px": null
+      }
+    },
+    {
+      "id": "empty-source",
+      "projected_source": [],
+      "target": [[0, 0, true]],
+      "matches": [],
+      "tolerance_px": 1,
+      "expected": {
+        "eligible_source_points": 0, "eligible_target_points": 1,
+        "geometric_pairs": 0, "accepted_pairs": 0, "correct_pairs": 0, "evaluated_pairs": 0,
+        "repeatability": null, "precision": null, "recall": null,
+        "rmse_all_px": null, "rmse_correct_px": null
+      }
+    }
+  ]
+}

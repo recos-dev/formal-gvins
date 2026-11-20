@@ -4,7 +4,8 @@ The frontend is optional and separate from the numerical core. It uses OpenCV
 4.13.0; `lib/opencv` and `lib/opencv_contrib` use matching release revisions.
 Only the CUDA profile needs contrib. No system-wide OpenCV installation is needed.
 Use CMake 3.20+, a C++20 compiler and the core build dependencies (Eigen by
-default). OpenCV itself is built in C++17 mode; project targets use C++20.
+default). Frontend tests and benchmark reporting also use Python 3.10+ (standard
+library only). OpenCV itself is built in C++17 mode; project targets use C++20.
 
 ## CPU build
 
@@ -125,3 +126,93 @@ Regression fixtures check timestamp precision, calibration direction, invalid
 data, descriptor encoding, known geometric outliers, spatial quotas and track
 lifetime. Actual-image inlier counts and timing do not establish physical match
 accuracy, navigation accuracy or target real-time bounds.
+
+## Fixed-dataset ORB benchmark
+
+Benchmarks are grouped by subject under `benchmark/`. The `features/` category
+contains its C++ program, runner, scorer, workload profile and dedicated tests.
+Additional benchmark subjects belong in sibling directories when implemented.
+
+The first runnable benchmark uses the production C++ `OrbTracker`, the EuRoC
+reader and a shared Python evaluator. It does not replace the frontend with a
+Python ORB implementation. The [profile](../../benchmark/features/profile.json)
+selects MH_01_easy cam0, zero-based frames 100--199, single-threaded OpenCV and a
+fixed RNG seed. Its `tracking` section explicitly sets every configurable ORB and
+tracking option; omitted options fail instead of inheriting production defaults.
+The runner writes `resolved-profile.json` once, passes that snapshot to both C++
+processes and checks their reported options against it. Fixed adapter properties
+such as WTA_K and descriptor smoothing remain identified in the native output.
+
+With the CPU build and extracted dataset above:
+
+```bash
+cmake --build build/frontend-cpu --target orb_benchmark --parallel 4
+python3 benchmark/features/run_feature_benchmark.py
+```
+
+The runner defaults to `datasets/euroc/MH_01_easy/mav0` and
+`build/frontend-cpu/orb_benchmark`. Use `--dataset MAV0_DIR` or `--executable PATH`
+to locate the same inputs/build elsewhere. `--profile FILE` selects a different
+explicit workload. `--cuda` selects the CUDA executable/backend with no CPU
+fallback; its smoothing difference still prevents a matched-settings speedup
+claim. This initial integration was exercised on the CPU profile.
+
+Two workloads use the same selected images:
+
+| Workload | Measurement |
+|---|---|
+| Actual consecutive frames | Production temporal tracking, observation/track IDs, accepted-match counts, read/remap latency and complete frontend latency. Per-feature precision, recall and RMSE remain unavailable without correspondence truth. |
+| Synthetic translation | Translate each undistorted image by `(12, -8)` pixels with a translated validity mask. Run the same tracker on the original/translated pair, then independently score its accepted matches against that known translation at 3 pixels. This is a geometry sanity test, not physical landmark ground truth or nonplanar epipolar qualification. |
+
+The workloads run sequentially in separate C++ processes, each with its own
+tracker and RNG state. The second workload is still attempted if the first fails;
+each has separate completion, failure and missing-case counts. Synthetic setup
+or tracking failures cannot reset real temporal tracks. Timings cover blocking production calls, including CUDA
+transfers/synchronization when selected; image loading, warping, scoring and
+visualization are outside frontend timing. The pair timing covers two tracker
+calls; it is not a single-frame latency. This is an offline per-call measurement,
+not a real-time arrival/scheduling test or an isolated hardware performance gate.
+
+Latency summaries exclude the first 10 scheduled frames and report median,
+nearest-rank P95/P99 and maximum over the remaining successful samples. Quality
+summaries report equally weighted per-frame means over defined metrics across all
+100 frames, with evaluated counts. Failed/missing cases remain in the scheduled
+case denominator; empty detections do not manufacture precision or RMSE.
+
+Results go to `output/feature-benchmark/cpu/` (or `cuda/`):
+
+- `temporal.json`, `translation.json`: separate native results, options and timings.
+- `resolved-profile.json`: the configuration snapshot consumed by both processes.
+- `frames.csv`: one row per scheduled case and workload, including failed/missing
+  cases. Column names and order are fixed; unavailable measurements are empty.
+- `summary.json`: per-workload completion/failure counts, latency/quality summaries, selected
+  input timestamps/SHA-256 hashes, executable/evaluator identities and host details.
+- `temporal.png`, `translation.png`: accepted matches for the final frame/pair.
+- `opencv-build.txt`: OpenCV build information.
+
+Use one writer per output directory. Rerunning replaces the named outputs and
+invalidates previous completion before cleanup or execution. CSV publication
+finishes before the final summary is atomically replaced. A failed publication
+leaves a failed, unfinished or absent completion marker; `running` and `writing`
+are unfinished states. This is a host file-publication protocol, not a power-loss
+durability guarantee.
+
+Top-level `complete` means both workloads executed/scored every requested case
+and their required report files were published. One failed workload does not
+discard the other's successful measurements. Completion does not mean
+an approved quality or regression threshold passed. Baseline comparison and
+per-stage profiling remain later work in the [benchmark proposal](../analysis/feature-benchmarks.md).
+
+Unit tests run without a dataset. Opt in to the same full dataset pipeline in
+CTest explicitly; it fails on missing inputs rather than downloading or skipping:
+
+```bash
+python3 -m unittest discover -s benchmark/features/tests -p 'test_*.py' -v
+cmake -S . -B build/frontend-cpu \
+    -DFORMAL_GVINS_BENCHMARK_DATASET="$PWD/datasets/euroc/MH_01_easy/mav0"
+ctest --test-dir build/frontend-cpu -R feature_benchmark --output-on-failure
+```
+
+CTest keeps its separate temporary run outputs in its build directory. Dataset
+files and run outputs remain Git-ignored. Numerical-core-only builds do not
+require OpenCV, Python or these dataset tests.

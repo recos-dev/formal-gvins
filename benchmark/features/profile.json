@@ -1,0 +1,25 @@
+{
+  "protocol": "euroc-orb-v2",
+  "dataset": "euroc/MH_01_easy/mav0",
+  "camera": 0,
+  "first_frame": 100,
+  "frame_count": 100,
+  "warmup_frames": 10,
+  "translation_x_px": 12,
+  "translation_y_px": -8,
+  "tolerance_px": 3,
+  "rng_seed": 0,
+  "tracking": {
+    "feature_count": 1000,
+    "scale_factor": 1.2,
+    "pyramid_levels": 8,
+    "fast_threshold": 20,
+    "feature_capacity": 400,
+    "grid_columns": 8,
+    "grid_rows": 6,
+    "ratio": 0.75,
+    "epipolar_threshold_px": 1.5,
+    "confidence": 0.99,
+    "ransac_iterations": 2000
+  }
+}

@@ -6,11 +6,19 @@ verification. Existing frontend decisions are recorded in the
 
 ## B-01: Per-module unit benchmarks
 
-**Status:** Planned
+**Status:** In progress; C++ ORB execution on a fixed EuRoC window, known-translation
+scoring, per-frame timings/reports and unit/integration tests are implemented.
+Per-stage profiling, qualified CPU/CUDA comparison and reviewed baselines remain
+pending. See the [runnable benchmark](guides/frontend.md#fixed-dataset-orb-benchmark).
 
 Build independently runnable benchmarks for each implemented module, reporting
 execution time together with an appropriate correctness or accuracy metric.
 Extend the inventory as MSCKF modules become available.
+
+The [feature benchmark proposal](analysis/feature-benchmarks.md) defines a shared
+runner, independent scorer and reviewed baselines for multiple frontend methods.
+It separates same-method regression from cross-method quality/cost comparison;
+adapters for new methods reuse the protocol rather than adding separate scorers.
 
 | Module | Accuracy / correctness metrics |
 |---|---|

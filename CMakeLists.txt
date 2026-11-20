@@ -57,8 +57,26 @@ if(FORMAL_GVINS_BUILD_FRONTEND)
     endif()
     add_executable(euroc_frontend examples/euroc_frontend.cpp)
     target_link_libraries(euroc_frontend PRIVATE formal_gvins_euroc formal_gvins_frontend)
-    set(FRONTEND_TARGETS formal_gvins_frontend formal_gvins_euroc euroc_frontend)
+    set(FEATURE_BENCHMARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/benchmark/features")
+    add_executable(orb_benchmark "${FEATURE_BENCHMARK_DIR}/orb_benchmark.cpp")
+    target_link_libraries(orb_benchmark PRIVATE formal_gvins_euroc formal_gvins_frontend)
+    target_compile_definitions(orb_benchmark PRIVATE
+        BENCHMARK_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+        BENCHMARK_BUILD_TYPE="$<CONFIG>")
+    set(FRONTEND_TARGETS formal_gvins_frontend formal_gvins_euroc euroc_frontend orb_benchmark)
     if(BUILD_TESTING)
+        find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME feature_benchmark_tools
+            COMMAND "${Python3_EXECUTABLE}" -m unittest discover -s "${FEATURE_BENCHMARK_DIR}/tests"
+                -p "test_*.py")
+        set(FORMAL_GVINS_BENCHMARK_DATASET "" CACHE PATH "EuRoC mav0 directory for the optional ORB benchmark test")
+        if(FORMAL_GVINS_BENCHMARK_DATASET)
+            add_test(NAME feature_benchmark_euroc
+                COMMAND "${Python3_EXECUTABLE}" "${FEATURE_BENCHMARK_DIR}/run_feature_benchmark.py"
+                    --executable $<TARGET_FILE:orb_benchmark> --dataset "${FORMAL_GVINS_BENCHMARK_DATASET}"
+                    --output "${CMAKE_CURRENT_BINARY_DIR}/feature-benchmark-output")
+            set_tests_properties(feature_benchmark_euroc PROPERTIES LABELS "dataset" TIMEOUT 660)
+        endif()
         add_executable(orb_frontend tests/test_orb.cpp)
         target_link_libraries(orb_frontend PRIVATE formal_gvins_frontend)
         add_test(NAME orb_frontend COMMAND orb_frontend)
