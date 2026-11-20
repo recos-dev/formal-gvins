@@ -841,11 +841,12 @@ feedback change the information/gauge model and need separate derivations.
 The imported [linalg](../../../include/formal_gvins/linalg/linalg.hpp),
 [scalar](../../../include/formal_gvins/scalar/math.hpp) and
 [SO(3)](../../../include/formal_gvins/so3/so3.hpp) layers provide numerical
-primitives. They do not yet provide active-size joint matrices, QR/nullspace
-operations, general coordinate-map solves, an MSCKF state or a feature frontend.
-The existing SPD solve cannot directly solve a nonsymmetric $T_a$.
-Eigen and CMSIS-DSP are backend
-choices; their external internals are not proved by shared mathematical theorems.
+primitives. The [linear algebra inventory](../../analysis/msckf-linear-algebra.md)
+tracks bounded operations and their acceptance boundary; the
+[frontend guide](../../guides/frontend.md) describes the separate image pipeline.
+These components do not implement the joint MSCKF transaction derived here.
+Eigen and CMSIS-DSP are backend choices; their external internals are not proved
+by shared mathematical theorems.
 
 | Boundary | Intended evidence, not completed proof |
 |---|---|

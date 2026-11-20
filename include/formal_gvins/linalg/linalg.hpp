@@ -15,3 +15,6 @@
 #include <formal_gvins/linalg/matrix.hpp>
 #include <formal_gvins/linalg/operations.hpp>
 #include <formal_gvins/linalg/solve.hpp>
+#include <formal_gvins/linalg/bounded.hpp>
+#include <formal_gvins/linalg/cholesky.hpp>
+#include <formal_gvins/linalg/qr.hpp>

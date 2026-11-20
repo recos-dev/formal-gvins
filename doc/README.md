@@ -17,6 +17,7 @@ requirement-decomposition relationship.
 | Downloading development recordings | [Dataset download guide](guides/datasets.md) |
 | CPU/CUDA frontend and EuRoC replay | [Frontend build and usage](guides/frontend.md) |
 | ORB settings and reference implementations | [Frontend parameter comparison](analysis/orb-frontend-settings.md) |
+| Bounded MSCKF numerical operations | [Linear algebra inventory and implementation boundary](analysis/msckf-linear-algebra.md) |
 
 ## Evidence and maintenance
 

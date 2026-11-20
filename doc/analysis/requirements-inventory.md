@@ -118,7 +118,7 @@ frontend tests do not establish physical association or navigation accuracy.
    with defined metrics/references; do not use frontend inlier counts as trajectory
    ground truth. New code/profile changes require impact review of these mappings.
 
-[GNSS and mapping](../spec/architecture/msckf-map-gnss.md) remain extension work,
+GNSS and mapping remain extension work,
 including frame/alignment uncertainty, timing, map lifetime and correlated feedback.
 Their unsettled models are not invented here or made prerequisites for accepting
 an independent numerical primitive. Requirements and profiles remain Draft until
