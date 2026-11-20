@@ -60,3 +60,14 @@ velocity, unchanged biases, aliasing, split-interval composition and failure.
 compares against the independent augmented-exponential oracle. The double profile
 uses 1e-12 coefficient tolerances for this mean comparison; this does not certify
 uniform floating-point bounds or arbitrary time-varying input accuracy.
+
+## Joint covariance propagation
+
+`predict` and `PredictionWorkspace` implement the full frozen transition and
+interval-equivalent Qd. The production probe checks every Psi/Qd coefficient and
+joint covariance against independent exponentials/complex-step sensitivities,
+including differing first estimates, correlated/zero noise, domain endpoints and
+both sides of the reference small-rate threshold. Native tests exercise peak clone
+capacity, preserved clone blocks, timestamps, workspace alias rejection and
+transactional failure. Test tolerances follow the profile's 1e-11 transition and
+1e-9 relative Qd limits; sampled agreement is not a uniform error proof.

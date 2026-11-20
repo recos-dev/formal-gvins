@@ -23,7 +23,7 @@ template <typename M> void print(M const & value)
         }
     }
 }
-int main()
+int main(int argc, char **)
 {
     using namespace formal_gvins;
     Eigen::internal::set_is_malloc_allowed(false);
@@ -50,5 +50,61 @@ int main()
     print(output.pose.p_WB);
     print(output.v_WB);
     print(so3::to_rotation_matrix(output.pose.q_WB));
+    if (argc > 1)
+    {
+        msckf::State<L, 2> joint;
+        joint.imu = state;
+        Vector first_angle;
+        read(first_angle);
+        read(joint.first.pose.p_WB);
+        read(joint.first.v_WB);
+        if (!succeeded(so3::exp(first_angle, .5, joint.first.pose.q_WB)))
+        {
+            return 4;
+        }
+        linalg::Matrix<L, 12, 12> Qc;
+        for (std::size_t i = 0; i < 12; ++i)
+        {
+            for (std::size_t j = 0; j < 12; ++j)
+            {
+                std::cin >> Qc(i, j);
+            }
+        }
+        if (!std::cin)
+        {
+            return 5;
+        }
+        joint.clone_count = 2;
+        joint.time_ns = 2;
+        for (std::size_t i = 0; i < 2; ++i)
+        {
+            joint.clones[i].time_ns = i;
+            joint.clones[i].id = i;
+        }
+        (void)joint.P.resize(27, 27);
+        for (std::size_t i = 0; i < 27; ++i)
+        {
+            for (std::size_t j = 0; j < 27; ++j)
+            {
+                joint.P(i, j) = (i == j ? .1 : 0) + .0001 * (i + 1) * (j + 1);
+            }
+        }
+        interval.start_ns = 2;
+        interval.end_ns += 2;
+        msckf::PredictionWorkspace<L, 2> work;
+        if (!succeeded(msckf::predict(joint, interval, gravity, Qc, msckf::Tolerances<double>{1e-12, 1e-12}, work)))
+        {
+            return 6;
+        }
+        print(work.Psi);
+        print(work.Qd);
+        for (std::size_t i = 0; i < 27; ++i)
+        {
+            for (std::size_t j = 0; j < 27; ++j)
+            {
+                std::cout << joint.P(i, j) << ' ';
+            }
+        }
+    }
     std::cout << '\n';
 }
