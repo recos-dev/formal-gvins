@@ -1,0 +1,33 @@
+/*
+ * formal-gvins is licensed under the Apache License, Version 2.0.
+ * See LICENSE for usage and redistribution terms.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#pragma once
+#include <cstdint>
+
+namespace formal_gvins::vision
+{
+
+/** Shared metadata for one image's observations; time is acquisition time in ns. */
+struct ImageIdentity
+{
+    std::uint64_t session_id = 0;
+    std::uint32_t camera_id = 0;
+    std::uint64_t image_id = 0;
+    std::uint64_t time_ns = 0;
+    std::uint64_t calibration_id = 0;
+    std::uint64_t noise_model_id = 0;
+};
+
+/** Undistorted pinhole pixels, interpreted using the enclosing image's bindings. */
+struct FeatureObservation
+{
+    std::uint64_t track_id = 0;
+    double u = 0;
+    double v = 0;
+};
+
+} /* end namespace formal_gvins::vision */

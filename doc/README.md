@@ -15,6 +15,8 @@ requirement-decomposition relationship.
 | Language and execution restrictions | [C++ subset](spec/requirements/common/cpp-subset.md) |
 | Offline experiments and regression data | [Dataset selection and regression proposal](analysis/offline-datasets.md) |
 | Downloading development recordings | [Dataset download guide](guides/datasets.md) |
+| CPU/CUDA ORB frontend | [Frontend build and usage](guides/frontend.md) |
+| ORB settings and reference implementations | [Frontend parameter comparison](analysis/orb-frontend-settings.md) |
 
 ## Evidence and maintenance
 
