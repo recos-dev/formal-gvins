@@ -4,18 +4,25 @@
 
 **Status:** Draft
 
-**Applies to:** Proposed reset-aware FEJ local-VIO profile; no absolute GNSS/map constraints.
+**Applies to:** Conventional FEJ local VIO with the identity-reset approximation;
+fixed calibration/gravity and no absolute GNSS/map constraints.
 
 **Parent:** [SW-MSCKF](../software/local-vio.md).
 
-**Uses:** [M-STATE](state.md), [F-JR](../math/so3/right-jacobian.md), [F-LEAST-SQUARES](../math/linalg/least-squares.md), [C-NUMERICAL-ACCEPTANCE](../common/numerical-acceptance.md).
+**Uses:** [M-STATE](state.md), [F-JR](../math/so3/right-jacobian.md), [C-NUMERICAL-ACCEPTANCE](../common/numerical-acceptance.md).
 
 ## Basis
 
 [Consistency and linearization](../../architecture/msckf-formulation.md#consistency-and-linearization)
-derives this project's endpoint and coordinate-map proposal. It is not a claim
-that OpenVINS uses these extra maps or that gauge identities prove statistical
-consistency in all conditions.
+derives the full FEJ transition and gauge composition. The reference is
+[OpenVINS analytic FEJ propagation](https://github.com/rpng/open_vins/blob/69488123ed9362dd44b6f28e7f4680abbff1442b/ov_msckf/src/state/Propagator.cpp),
+translated to this project's Hamilton/right-local convention and state order.
+M-PROPAGATE adopts that path's endpoint inputs and analytical discrete-noise
+construction. Exp injection, numerical coefficient evaluation and fully frozen
+camera distortion derivatives remain explicit project choices. The pinned visual
+path keeps the distortion derivative at the current point while freezing the pose
+and normalized-projection factors; the linked derivation explains the difference.
+This is not whole-filter equivalence to OpenVINS.
 
 ## Required behavior
 
@@ -23,50 +30,63 @@ First estimates shall have the following lifetimes:
 
 | Quantity | Binding |
 |---|---|
-| Current IMU pose/velocity | Newly propagated nominal at each new time, held through corrections at that time. |
-| Clone pose | Current first estimate at clone creation, frozen until removal. |
-| Temporary feature | One triangulated point per candidate assembly, common to all rows; a rebuild rebuilds every row consistently. |
-| Biases/held input | Current corrected bias means and declared interval input for physical propagation/noise. |
+| Current IMU pose/velocity | Initialize from the accepted initial state; replace only with the newly propagated nominal at each new time, before correction there. Hold through all corrections at that time. |
+| Clone pose | Copy the current IMU's first estimate when cloned; freeze until removal. Copy the nominal pose separately, since the two can differ. |
+| Temporary feature | One triangulated global point per candidate assembly, common to all rows; rebuilding a candidate rebuilds every row consistently. |
+| Biases/held input | Current corrected bias means and declared interval input for the nominal propagation and interval integrals. |
 
-Residuals shall use current estimates; every geometric Jacobian factor, including
-projection derivatives, shall use the common frozen points. Both current and
-frozen projections require valid domains. Do not mix per-row feature estimates.
+Residuals shall use current nominal poses and the candidate feature estimate.
+All geometric Jacobian factors, including projection and distortion derivatives,
+shall use the common frozen poses/feature point. Current and frozen projections both require
+valid domains. Use `Hx=Hx0`, `Hf=Hf0` directly, without reset-coordinate maps.
 
-Starting from the physical ZOH transition, replace exactly its three attitude
-column blocks with
+For interval h, let the new first estimate be the propagated nominal endpoint.
+Define `D_R=(R_next0)^T*R_previous0`,
+`dv0=v_next0-v_previous0-g_W*h`,
+`dp0=p_next0-p_previous0-v_previous0*h-g_W*h^2/2`, and `phi=omega*h`.
+Use A1, A2, B1, B2 of the held-input model with current corrected biases.
+In error order `(p,v,theta,ba,bg)`, the complete covariance transition shall be
 
 $$
-\Phi^0_{\theta\theta}=(R_{k+1}^0)^\mathsf TR_k^0,\quad
-\Phi^0_{v\theta}=-[v_{k+1}^0-v_k^0-g_Wh]_\times R_k^0,
-$$
-$$
-\Phi^0_{p\theta}=-[p_{k+1}^0-p_k^0-v_k^0h-\tfrac12g_Wh^2]_\times R_k^0.
+\Psi=\begin{bmatrix}
+I&hI&-[dp^0]_\times R^0&-R^0A_2&R^0B_2\\
+0&I&-[dv^0]_\times R^0&-R^0A_1&R^0B_1\\
+0&0&D_R&0&-hD_R J_r(-\phi)\\
+0&0&0&I&0\\
+0&0&0&0&I
+\end{bmatrix},\qquad R^0=R_{\mathrm{previous}}^0.
 $$
 
-Maintain attitude-coordinate maps T_a, initially I, so `delta x=T*e` for the frozen
-linear model; T is block diagonal with identity on additive coordinates.
-Use `Hx=Hx0*T^-1` via small solves. After injection/reset, use `T'=G*T`, keeping
-first estimates fixed. Do not replace a reset derivative by a finite attitude
-rotation or silently refresh frozen clone points.
-
-At propagation set the new IMU map to I and retain clone maps; use
-`Phi_use=T_next*diag(Phi0,I_clones)*T_previous^-1` with the physical Qd in the new
-local coordinates. Copy maps/first estimates on cloning and remove them with
-their clone. Failed or inadequately conditioned map solves shall not publish a
-partial update or silently fall back to a different consistency policy.
+In particular, bias-sensitive blocks shall use the frozen attitude factors
+shown here, not unspecified blocks from the current-state physical transition.
+The joint transition is `diag(Psi,I_clones)`; M-PROPAGATE owns Qd and covariance
+propagation, using the same frozen attitude factors in Gd. Corrections shall
+retain first estimates and apply M-CORRECT's
+identity reset. No accumulated T map, map solve or `Hx0*T^-1` is part of this
+baseline. Adding a physical Jr reset requires a separately reviewed consistency
+model; it shall not be inserted only into covariance.
 
 ## Acceptance and verification
 
-Using the formulation's four-column translation/yaw gauge basis N, establish
-`H_o*N=0`, `Phi_use*N_k=N_next` and compatible augmentation/reset/removal maps.
-Test sequences with intervening corrections; single-step Jacobian checks alone
-are insufficient. Numerical residuals, correction-size/conditioning limits and
-trajectory/NEES-style statistical studies are separate acceptance work. Do not
-claim that P has four zero eigenvalues, or that the modified Phi/noise pair is
-the exact original continuous ODE model.
+Using the formulation's frozen four-column gauge `N0=N(x0)`, establish
+`Hx0*N0+Hf0*Nf0=0`, `H_o*N0=0`, `diag(Psi,I)*N0_previous=N0_next`, and
+`(I-K*H_o)*N0=N0`. Establish compatible cloning, identity reset and selection.
+Test repeated corrections, propagation and clone retirement together.
+
+Check every block against the translated analytic reference structure, including
+bias blocks not constrained by the gauge identities. With first/current estimates
+equal, Psi shall reduce to the ordinary ZOH derivative, using
+`E(h)^T*J_r(-phi)=J_r(phi)`. Check nonidentity rotations, nonzero biases and
+convention/state-order translation independently of gauge tests.
+
+These obligations concern the selected linear model. They do not establish exact
+nonlinear covariance, physical gauge transport under finite injection, whole-filter
+OpenVINS equivalence or statistical consistency. Numerical acceptance and synthetic
+Monte Carlo/trajectory studies remain separate work.
 
 ## Open decisions
 
-The proposal needs owner review and qualified correction/map-conditioning bounds
-before deployment. GNSS or map constraints change the gauge model and require a
-separate derivation; no such acceptance is inherited here.
+The [development profile](../../profiles/local-vins.md) proposes a correction
+domain; its adequacy for the identity-reset/frozen-linearization approximations
+still needs owner review and empirical qualification. GNSS/map observations
+change the information model and require a separate derivation.

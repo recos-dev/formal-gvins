@@ -26,7 +26,8 @@ $$
 P_{aug}=\begin{bmatrix}P&PJ_c^\mathsf T\\J_cP&J_cPJ_c^\mathsf T\end{bmatrix}.
 $$
 
-Copy the matching first estimate and attitude-coordinate map into the clone.
+Copy the matching first estimate into the clone separately from its nominal pose.
+There is no accumulated reset-coordinate map.
 Add no independent clone noise. Exact covariance may become singular; rejecting
 it merely for not being SPD would violate this model. A synchronized stereo pair
 may share a clone only under its reviewed acquisition/time model.

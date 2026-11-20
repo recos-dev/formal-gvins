@@ -19,6 +19,7 @@ requirement-decomposition relationship.
 | ORB settings and reference implementations | [Frontend parameter comparison](analysis/orb-frontend-settings.md) |
 | Feature frontend regression and comparison | [Benchmark design proposal](analysis/feature-benchmarks.md) |
 | Bounded MSCKF numerical operations | [Linear algebra inventory and implementation boundary](analysis/msckf-linear-algebra.md) |
+| MSCKF literature and design decisions | [Design cross-check and open consistency decision](analysis/msckf-design-review.md) |
 
 ## Evidence and maintenance
 

@@ -92,9 +92,12 @@ obligations; calling an operation does not make the caller its requirement child
 ## Development profiles
 
 - [ORB frontend](profiles/orb-frontend.md): current CPU/CUDA settings, validation
-  ranges, descriptor compatibility and unresolved quality/resource acceptance.
+  ranges, raw-image migration, descriptor compatibility and unresolved quality/resource acceptance.
 - [EuRoC acquisition](profiles/euroc.md): dataset conversion, coordinates/time,
-  reference-truth handling and outstanding estimator/scoring qualifications.
+  current remapped-image behavior, raw-image target and estimator/scoring qualifications.
+- [Local VINS](profiles/local-vins.md): proposed mono/CPU estimator bindings,
+  raw-pixel camera model, initialization, capacities, propagation evaluation,
+  FEJ/reset limits and updates.
 
 These Draft profiles describe current development choices. They neither approve
 flight settings nor waive the linked requirements' unresolved bounds.

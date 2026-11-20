@@ -11,8 +11,8 @@
 ## Basis
 
 The [project formulation](../../architecture/msckf-formulation.md) derives this
-local-error model and its proposed FEJ coordinate transport. This allocation
-remains Draft and does not claim an implemented estimator or approved FEJ design.
+local-error model and its conventional FEJ/identity-reset approximation. This
+allocation remains Draft and does not claim an implemented estimator or approved FEJ design.
 
 ## Required behavior
 
@@ -36,12 +36,12 @@ No flight accuracy or real-time guarantee follows from the mathematical model.
 | Child | Allocated obligation |
 |---|---|
 | [M-STATE](../msckf/state.md) | Joint coordinates, initial validity and bounded storage. |
-| [M-PROPAGATE](../msckf/propagation.md) | Held-input nominal propagation and matched transition/noise. |
+| [M-PROPAGATE](../msckf/propagation.md) | Held-input nominal propagation, FEJ covariance propagation and analytical interval-equivalent process noise. |
 | [M-CLONE](../msckf/clones.md) | Pose augmentation/removal with full covariance and identity. |
 | [M-VISUAL](../msckf/visual-geometry.md) | Projection, triangulation and geometric Jacobians. |
 | [M-CONSTRAINT](../msckf/constraints.md) | Whitening, feature elimination, gate and compression. |
 | [M-CORRECT](../msckf/correction.md) | Joseph correction, all-pose injection/reset and publication. |
-| [M-FEJ](../msckf/consistency.md) | First estimates, coordinate transport and gauge compatibility. |
+| [M-FEJ](../msckf/consistency.md) | First-estimate lifetime, full FEJ transition and linear-model gauge compatibility. |
 | [M-LIFECYCLE](../msckf/lifecycle.md) | Time/order/capacity/recovery and observation transaction composition. |
 
 ## Acceptance and verification

@@ -20,7 +20,6 @@ boundary. Changes to behavior must update those canonical requirements.
 | Constraint compression | None | Reuse QR row transforms; retain the column permutation. Rank truncation needs its own error criterion. |
 | Triangulation linear subproblems | Fixed SPD only | Full-column-rank least squares via QR, without normal equations or a matrix inverse. |
 | Innovation and joint correction | Fixed SPD left/right solve | Active-size SPD solve and products, keeping the existing fixed-size API. |
-| FEJ attitude coordinate transport | No nonsymmetric solve | Full-rank square solve using the same QR reduction; right solves via transpose. This does not approve the proposed FEJ policy. |
 
 ## Implementation boundary
 
@@ -45,7 +44,8 @@ operation accepts only full-column-rank input and retains transformed RHS rows
 below that rank. Tests need orthogonality/annihilation and least-squares identities,
 not a particular sign convention for Q or coefficient equality with another QR.
 
-Full-rank rectangular QR also supplies the needed nonsymmetric square solve.
+Full-rank rectangular QR also supports square systems. The selected conventional
+FEJ baseline has no attitude-coordinate-map solve.
 General eigensolvers, SVD/pseudoinverse, sparse factor-graph solvers and GPU linalg
 are not needed for this selected first profile. Degenerate triangulation is
 rejected rather than silently assigned a minimum-norm solution.

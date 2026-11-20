@@ -27,8 +27,10 @@ are fixed profile inputs, not estimated state components in this baseline.
 
 One joint covariance shall retain IMU/clone and clone/clone cross-correlations.
 Its exact premise is symmetric positive semidefinite, not strictly positive
-definite. Temporary feature points, descriptors, track histories and FEJ coordinate
-maps shall not add independent physical states or covariance dimensions.
+definite. Temporary feature points, descriptors, track histories and frozen first
+estimates shall not add independent physical states or covariance dimensions. P follows
+M-FEJ/M-CORRECT's first-order covariance and identity-reset approximation; it is
+not claimed to be an exactly transported nonlinear physical-error covariance.
 
 Initialization shall establish finite state, qualified quaternion norm residuals,
 matching covariance/layout and declared frame/time/calibration/bias priors before

@@ -6,7 +6,7 @@
 [V-EXECUTION](../requirements/vision/frontend-execution.md),
 [V-OBSERVATION](../requirements/vision/observation-admission.md).
 
-## Implementation binding
+## Current implementation binding
 
 This profile describes [OrbOptions/OrbTracker](../../../include/formal_gvins/vision/tracker.hpp)
 and the [EuRoC frontend executable](../../../examples/euroc_frontend.cpp).
@@ -36,6 +36,27 @@ iterations are 1--10000. These validation limits are not calibrated quality boun
 Initialization/configuration status is checked before operation-specific input;
 OpenCV exceptions are contained, while host allocation exceptions may propagate.
 
+## Local VINS target
+
+The [local VINS profile](local-vins.md) selects extraction/description on original
+distorted images and publication of raw pixel coordinates. The current tracker
+above still assumes undistorted pinhole input; its K-only essential-matrix call
+cannot be used on raw distorted coordinates unchanged.
+
+The migration must bind K and the lens model/coefficients, derive normalized
+coordinates pointwise for geometric verification, and retain raw coordinates for
+the estimator's residuals. Derived coordinates may be cached or recomputed, but
+must stay paired with the same raw feature and calibration. Inverse failures
+cannot become geometric inliers. Declare the geometric residual metric and
+threshold units before replacing the current 1.5-pixel test; its value is not a
+normalized-coordinate threshold.
+
+Keep the extraction, descriptor and capacity settings above as starting values.
+Qualify tracking, raw-pixel localization noise and CPU/CUDA benchmarks again for
+this domain. Retained remapped-image results remain an identified earlier input
+profile, not a baseline that silently changes meaning. This migration has no
+production implementation yet.
+
 ## CPU/CUDA compatibility and acceptance gaps
 
 CPU and CUDA enable the same descriptor-smoothing parameters. This does not
@@ -48,8 +69,8 @@ or triangulation certificate. Minimum spacing, cross-scale deduplication, recipr
 matching, subpixel refinement and detector fallback are not part of this profile.
 Changes require named experiments and renewed acceptance, not implicit adoption.
 
-Before estimator/deployment acceptance, bind pixel-noise covariance after remapping,
-tracking accuracy limits, exposure/clock assumptions, image-size/resource limits,
+Before estimator/deployment acceptance, bind pixel-noise covariance in the selected
+image domain, tracking accuracy limits, exposure/clock assumptions, image-size/resource limits,
 allocation-failure recovery and target deadlines. RTX 3060 measurements cannot
 qualify Orin execution. The replay's development noise-model ID does not discharge
 these obligations. [Per-module benchmarks](../../roadmap.md#b-01-per-module-unit-benchmarks)

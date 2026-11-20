@@ -22,11 +22,12 @@ The image update shall follow this dependency order:
 
 1. Validate identity/time/binding; propagate to the modeled exposure time using
    qualified IMU intervals and establish the current first estimate.
-2. Augment the IMU-pose clone with matching first estimate/map, and admit observations.
+2. Augment the IMU-pose clone with matching first estimate, and admit observations.
 3. Select eligible tracks, including those affected by impending clone retirement.
 4. Triangulate, validate geometry, assemble/whiten, eliminate feature error, gate
    and optionally compress accepted constraints.
-5. Correct/inject/reset the complete joint estimate and FEJ maps.
+5. Correct/inject the complete joint estimate, apply identity reset and retain
+   frozen first estimates.
 6. Commit successful consumption consistently, then retire records/remove clones
    under the declared policy.
 

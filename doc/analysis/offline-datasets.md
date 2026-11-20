@@ -60,12 +60,13 @@ values; selected file headers have been checked, but full-bag validation remains
 part of dataset qualification.
 [Dataset metadata](https://github.com/HKUST-Aerial-Robotics/GVINS-Dataset).
 
-The published camera calibration uses **MEI**, not the draft's undistorted
-pinhole projection. An adapter must unproject/rectify using the actual model,
-bind observations to the resulting calibration, and account for transformed
-measurement uncertainty. MEI `gamma1`/`gamma2` are not interchangeable with a
-pinhole focal length. Fix the image conversion, valid mask and ORB coordinate
-policy in the acquisition profile.
+The published camera calibration uses **MEI**, not the first EuRoC profile's
+radial-tangential model. Retaining the selected raw-pixel residual requires MEI
+forward projection, pointwise inverse and matched derivatives, with a qualified
+domain/noise binding. MEI `gamma1`/`gamma2` cannot simply replace pinhole focal
+lengths while omitting the MEI model. Any rectified-image alternative needs an
+explicit acquisition profile and transformed calibration/noise model; it is not
+the selected local VINS input path.
 [Published calibration](https://github.com/HKUST-Aerial-Robotics/GVINS-Dataset/blob/main/data/visensor_parameters/right_camera.yaml).
 
 For raw-GNSS evaluation, retain the shared-receiver limitation of the RTK

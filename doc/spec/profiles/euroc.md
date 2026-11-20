@@ -5,7 +5,7 @@
 **Requirements:** [V-ACQUISITION](../requirements/vision/acquisition.md),
 [V-FRAMES](../requirements/common/frames.md).
 
-## Binding
+## Current implementation binding
 
 The [reader](../../../src/dataset/euroc.cpp) accepts an ASL/CSV `mav0` directory;
 download identity is controlled by the [dataset guide](../../guides/datasets.md).
@@ -28,6 +28,21 @@ Whole-sequence metadata loading returns a complete value or fails; it does not
 modify a caller's existing estimator. Camera calibration/noise IDs in the demo
 are local to a run, not global database identities.
 
+## Local VINS target
+
+The [local VINS profile](local-vins.md) selects original distorted grayscale
+images and raw-pixel observations. Before estimator integration, the reader path
+must expose those images with their original K, radial-tangential coefficients,
+dimensions and T_BC, without the current full-image remap. Any input mask must
+describe valid pixels in that raw image, not reuse the remapped valid mask.
+Pointwise undistortion belongs to geometry processing, preserving raw observations.
+
+The implementation/table above still describe the remapped-image frontend.
+Existing fixtures and benchmark outputs cover that path; they do not establish
+the new binding. Add raw-image/calibration preservation checks and qualify the
+new observation noise before connecting the estimator. Merely changing a
+calibration/noise ID does not convert existing observations to raw coordinates.
+
 ## Acceptance and unresolved bindings
 
 [Reader fixtures](../../../tests/test_euroc.cpp) check timestamp precision, column
@@ -40,5 +55,7 @@ alone do not establish those physical facts. The reader performs no truth/frame
 alignment, interpolation or scoring. W has gravity along positive z and need not
 equal R. A scoring profile must declare R-to-W alignment, valid truth intervals,
 interpolation/normalization and error metric conventions before reporting RMSE.
-Image noise after remapping remains unqualified. This profile therefore supports
-frontend experiments without claiming readiness for a complete MSCKF regression.
+The current remapped-image noise and the selected raw-image ORB localization
+noise both remain unqualified; they are separate evidence domains. This profile
+therefore supports frontend experiments without claiming readiness for a complete
+MSCKF regression.

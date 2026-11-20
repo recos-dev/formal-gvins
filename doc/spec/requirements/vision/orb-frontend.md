@@ -29,6 +29,12 @@ image dimensions, pyramid settings, detector settings and feature budget.
 Invalid image/configuration input shall not create observations or alter existing
 track associations.
 
+For the local VINS profile, extraction shall operate on original distorted images
+without a full-image undistortion remap. Published coordinates shall remain raw
+pixels. Pointwise undistorted/normalized coordinates used for geometry shall be
+derived with the same calibration and retain their source feature identity;
+they shall not overwrite the raw observation or count as another measurement.
+
 The first descriptor profile shall use `WTA_K = 2` and Hamming distance. Other
 descriptor encodings shall not be compared as if they belonged to this profile.
 Extraction shall preserve the association between each returned keypoint and its
@@ -68,6 +74,12 @@ outliers; failure to obtain an admissible model shall not be interpreted as all
 matches being inliers. A descriptor match alone shall not create a confirmed
 continuation of a track.
 
+For raw-image input, essential-matrix verification shall use valid pointwise
+undistorted coordinates. The profile shall define its residual metric and
+threshold units; the existing undistorted-image pixel threshold shall not be
+silently reinterpreted as a threshold in normalized coordinates. Failed point
+undistortion shall not create a confirmed continuation.
+
 Within a camera/frame pair, published associations shall be one-to-one. Conflicting
 candidates shall be rejected or resolved by the declared selection policy before
 track IDs are assigned. The frontend shall preserve identity according to
@@ -87,6 +99,9 @@ Check keypoint/descriptor pairing after selection, count/mask bounds, empty and
 invalid inputs, descriptor incompatibility, insufficient neighbors, distance ties,
 one-to-one conflicts and geometry-estimation failure. Verify that rejected matches
 do not inherit track IDs and that retained descriptors survive live-buffer reuse.
+For the raw-image profile, verify raw/bearing pairing, calibration identity,
+inverse failures and geometric-threshold units. Existing remapped-image tests
+and benchmarks do not establish acceptance of this changed input domain.
 
 Evaluate track survival, spatial coverage, false associations and estimator error
 on identified sequences. Measure extraction/matching latency and memory on the
