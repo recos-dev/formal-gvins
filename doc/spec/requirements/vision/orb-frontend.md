@@ -6,7 +6,7 @@
 
 **Applies to:** The first image-frontend profile; no SLAM map or relocalization implementation is implied.
 
-**Uses:** [V-FRAMES](../common/frames.md), [V-TRACK](feature-tracks.md).
+**Uses:** [V-FRAMES](../common/frames.md), [V-TRACK](feature-tracks.md), [V-EXECUTION](frontend-execution.md).
 
 ## Basis
 
@@ -32,12 +32,19 @@ track associations.
 The first descriptor profile shall use `WTA_K = 2` and Hamming distance. Other
 descriptor encodings shall not be compared as if they belonged to this profile.
 Extraction shall preserve the association between each returned keypoint and its
-descriptor, including after filtering or reordering. Keypoint coordinates shall
-be finite and inside the admitted image and selection mask.
+descriptor, including after filtering or reordering. The tracking/publication
+boundary shall admit only finite keypoint coordinates inside the image and
+selection mask. Raw extractor candidates are not admitted observations.
 
-The published count shall not exceed the configured feature capacity. Selection
-shall apply declared spatial quotas so a dense textured area cannot consume the
-entire allocation; empty regions need not produce artificial features. Descriptor
+Descriptor compatibility shall include encoding, pattern/version and preprocessing
+recipe. A caller supplying descriptor blocks shall establish that binding; byte
+shape alone is insufficient. The current adapter checks rows/type/width, not
+descriptor provenance. Mixing incompatible recipes requires separate validation
+and shall not be treated as equivalent execution of one descriptor profile.
+
+The tracking boundary's published count shall not exceed the configured feature
+capacity. Selection shall apply declared spatial quotas so a dense textured area
+cannot consume the entire allocation; empty regions need not produce artificial features. Descriptor
 storage shall be owned or have a lifetime covering every consumer. A retained
 keyframe shall own the descriptors and coordinate/calibration metadata needed
 after the live image buffers are reused.
@@ -94,3 +101,6 @@ model, inlier thresholds, robust-estimation iteration limit, conflict policy and
 target latency/memory limits require a reviewed frontend profile. Camera choice
 and coordinate calibration follow V-FRAMES. No numerical defaults or flight
 performance claims are established by this requirement.
+
+The [development profile](../../profiles/orb-frontend.md) identifies current
+choices and acceptance gaps; it does not approve those values for deployment.

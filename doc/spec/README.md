@@ -50,17 +50,31 @@ and loop correction still require allocated contracts.
 | `SO3-SMALL-ANGLE` | [Small-angle behavior](requirements/math/so3/small-angle.md) | Draft |
 | `F-JR` | [SO(3) right Jacobian](requirements/math/so3/right-jacobian.md) | Draft |
 
-## Visual observations
+## Acquisition and visual observations
 
 | ID | Requirement | Status |
 |---|---|---|
 | `V-ORB` | [ORB extraction and temporal association](requirements/vision/orb-frontend.md) | Draft |
 | `V-TRACK` | [Feature observation identity and ownership](requirements/vision/feature-tracks.md) | Draft |
+| `V-OBSERVATION` | [Observation identity and admission](requirements/vision/observation-admission.md) | Draft |
+| `V-ASSOCIATION` | [Track/clone association and lifetime](requirements/vision/track-association.md) | Draft |
+| `V-CONSUMPTION` | [Once-only consumption](requirements/vision/observation-consumption.md) | Draft |
+| `V-ACQUISITION` | [Sensor time and calibration binding](requirements/vision/acquisition.md) | Draft |
+| `V-EXECUTION` | [Host frontend execution](requirements/vision/frontend-execution.md) | Draft |
 
-Reusable primitives and boundary contracts are independent roots here. Uses links
-identify dependencies; they do not claim a completed software-capability
-decomposition. New capability parents must allocate their own composition behavior
-when that scope is defined.
+V-TRACK retains its composition scope and allocates identity, association and
+consumption to three children. V-ORB uses that boundary; it is not the parent of
+the estimator's observation store.
+
+## Development profiles
+
+- [ORB frontend](profiles/orb-frontend.md): current CPU/CUDA settings, validation
+  ranges, descriptor compatibility and unresolved quality/resource acceptance.
+- [EuRoC acquisition](profiles/euroc.md): dataset conversion, coordinates/time,
+  reference-truth handling and outstanding estimator/scoring qualifications.
+
+These Draft profiles describe current development choices. They neither approve
+flight settings nor waive the linked requirements' unresolved bounds.
 
 ## Reuse and evidence
 
