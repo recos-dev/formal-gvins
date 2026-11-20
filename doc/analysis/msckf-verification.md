@@ -43,3 +43,11 @@ admission (`M-STATE`), with tests in `tests/test_msckf_state.cpp`. N=0 and capac
 11 are exercised with allocation disabled. Tests cover active dimensions, duplicate
 IDs/times, inactive slots, asymmetry, non-finite inputs and failed assignment.
 They do not prove the PSD or physical suitability of a caller-supplied prior.
+
+## IMU interval arithmetic
+
+`interpolate`, `prepare_interval` and `validate_interval` implement M-PROPAGATE's
+input arithmetic; `tests/test_msckf_imu.cpp` checks integer-epoch interpolation,
+endpoint reuse, bias recomputation, original-gap limits, domains and atomicity.
+The caller supplies the raw bracket, prevents interior-sample skipping and owns
+buffer/time scheduling. No sensor stream or noise-correlation claim is made.
