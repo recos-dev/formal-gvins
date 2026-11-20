@@ -5,10 +5,10 @@ approval and evidence ownership. Each independently reviewable requirement has
 one canonical file. Parent links express derivation; Uses links express contract
 dependencies. Directory placement alone expresses neither.
 
-This initial set covers numerical foundations, coordinate conventions and the
-ORB/feature-track boundary. It is not a complete MSCKF or SLAM specification.
-Joint-state transitions, consistency policy, map management, relocalization
-and loop correction still require allocated contracts.
+This Draft set allocates numerical foundations, acquisition/frontend boundaries,
+feature ownership and the proposed local MSCKF. It is not an implemented or
+approved estimator. Profile values and open acceptance decisions remain explicit.
+GNSS, mapping, relocalization and loop correction remain extension proposals.
 
 ## Common contracts
 
@@ -66,6 +66,24 @@ V-TRACK retains its composition scope and allocates identity, association and
 consumption to three children. V-ORB uses that boundary; it is not the parent of
 the estimator's observation store.
 
+## Local MSCKF capability
+
+| ID | Requirement | Status |
+|---|---|---|
+| `SW-MSCKF` | [Local visual-inertial estimation](requirements/software/local-vio.md) | Draft |
+| `M-STATE` | [Joint state and initial validity](requirements/msckf/state.md) | Draft |
+| `M-PROPAGATE` | [Held-input joint propagation](requirements/msckf/propagation.md) | Draft |
+| `M-CLONE` | [Pose cloning and covariance selection](requirements/msckf/clones.md) | Draft |
+| `M-VISUAL` | [Feature geometry and Jacobians](requirements/msckf/visual-geometry.md) | Draft |
+| `M-CONSTRAINT` | [Constraint elimination and acceptance](requirements/msckf/constraints.md) | Draft |
+| `M-CORRECT` | [Joint correction and reset](requirements/msckf/correction.md) | Draft |
+| `M-FEJ` | [First estimates and coordinate consistency](requirements/msckf/consistency.md) | Draft |
+| `M-LIFECYCLE` | [Execution and transactions](requirements/msckf/lifecycle.md) | Draft |
+
+SW-MSCKF owns composition and has eight direct children. Reusable mathematical
+and common contracts remain roots referenced through Uses. Parent links allocate
+obligations; calling an operation does not make the caller its requirement child.
+
 ## Development profiles
 
 - [ORB frontend](profiles/orb-frontend.md): current CPU/CUDA settings, validation
@@ -80,9 +98,9 @@ flight settings nor waive the linked requirements' unresolved bounds.
 
 The original reusable mathematical requirements retain IDs and operation semantics from
 [formal-eskf revision 6e4ffb5](https://github.com/recos-dev/formal-eskf/tree/6e4ffb5bc5932804c177cbacfd5a10e3126f981a/docs/spec/requirements/math).
-Project names, links and application scope are adapted. The additional linalg
-contracts are local allocations; F-SOLVE also covers active solves. The four
-common numerical contracts are tailored from the
+Project names, links and application scope are adapted. Active-size and MSCKF
+allocations are local additions; F-SOLVE also covers active solves. The four common
+numerical contracts are tailored from the
 [same revision](https://github.com/recos-dev/formal-eskf/tree/6e4ffb5bc5932804c177cbacfd5a10e3126f981a/docs/spec/requirements/common):
 ESKF state checks, configuration macros and historical evidence are not inherited.
 The project code and documentation use [Apache-2.0](../../LICENSE).

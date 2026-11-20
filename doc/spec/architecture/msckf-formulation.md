@@ -9,6 +9,12 @@ awaiting owner review. It does not describe an implemented MSCKF or establish
 proof coverage. The [requirement index](../README.md) owns the allocated contracts;
 remaining equations here are derivations/proposals, not approved requirements.
 
+[SW-MSCKF](../requirements/software/local-vio.md) allocates the proposed local
+behavior to eight Draft children. Their Basis links identify the derivation
+sections below. Requirements own obligations/acceptance; this document owns the
+supporting model and derivation. Both remain subject to review, including the
+reset-aware FEJ proposal and its unresolved numerical domain.
+
 The proposed first profile uses a calibrated IMU, fixed camera intrinsics and
 extrinsics, known camera/IMU clock alignment, global-shutter images, a constant
 known gravity vector and static point features. It supports monocular or
