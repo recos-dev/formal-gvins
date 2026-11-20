@@ -10,6 +10,8 @@ requirement-decomposition relationship.
 | Requirements | [Specification index](spec/README.md) |
 | C++ readability and organization | [Coding style](guides/coding-style.md) |
 | Language and execution restrictions | [C++ subset](spec/requirements/common/cpp-subset.md) |
+| Offline experiments and regression data | [Dataset selection and regression proposal](analysis/offline-datasets.md) |
+| Downloading development recordings | [Dataset download guide](guides/datasets.md) |
 
 ## Evidence and maintenance
 

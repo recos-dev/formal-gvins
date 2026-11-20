@@ -1,4 +1,5 @@
 /build/
+/datasets/
 /output/
 /tmp/
 __pycache__/
