@@ -110,6 +110,14 @@ if(FORMAL_GVINS_BUILD_FRONTEND)
 endif()
 
 if(BUILD_TESTING)
+    option(FORMAL_GVINS_BUILD_MATH_REFERENCE_TESTS "Run independent Python mathematics checks" OFF)
+    if(FORMAL_GVINS_BUILD_MATH_REFERENCE_TESTS)
+        find_package(Python3 3.10 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME msckf_equations
+            COMMAND "${Python3_EXECUTABLE}" -m unittest discover
+                -s "${CMAKE_CURRENT_SOURCE_DIR}/tests/reference" -p "test_*.py")
+    endif()
+
     function(add_numeric_test NAME SOURCE BACKEND)
         add_executable(${NAME} ${SOURCE})
         target_link_libraries(${NAME} PRIVATE ${BACKEND})

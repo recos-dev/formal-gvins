@@ -4,25 +4,26 @@ This list tracks planned work. It does not approve requirements or claim complet
 verification. Existing frontend decisions are recorded in the
 [ORB reference comparison](analysis/orb-frontend-settings.md).
 
-## Local VINS implementation sequence
+## MSCKF mathematics implementation sequence
 
-**Status:** Plan retained for review. VINS-01 has a
-[Draft profile](spec/profiles/local-vins.md) ready for owner review;
-VINS-LIT has a [literature/design review](analysis/msckf-design-review.md)
-ready for owner review. The conventional-FEJ/Exp/identity-reset revision is
-Draft; owner review and remaining profile clarifications precede dependent code.
-VINS-02 through VINS-12 and VINS-RT are unimplemented.
+**Status:** The formulation, reference comparison and local profile are committed
+as Draft at `b568004`. The action sequence below is proposed for stepwise review
+and implementation; it does not approve those requirements or authorize commits.
 The current repository has numerical primitives, an ORB frontend, EuRoC input and
 feature benchmarks. It does not yet implement the joint MSCKF estimator.
 
-The first milestone is an offline monocular visual-inertial estimator producing
-metric local pose, velocity, biases and covariance from cam0 images and IMU data.
-Start with CPU ORB, Eigen/double, fixed calibration and a declared camera/IMU
-clock binding. The selected raw-image profile requires the frontend migration
-below. Use a qualified stationary-start policy initially;
-moving-start initialization is a separate extension. Ground truth is evaluation
-input only. This plan does not make GNSS, stereo, loop closure, relocalization,
-online calibration or Orin optimization prerequisites for the first local VINS.
+The current scope is formula verification and the C++ mathematical filter:
+bounded state/covariance storage, propagation, cloning, camera/feature geometry,
+camera residual/Jacobian evaluation and generic correction. Use Eigen/double, fixed calibration and the
+selected Hamilton/FEJ formulation. Callers supply valid initial states, covered IMU
+intervals and observations associated with the requested clones. Synthetic tests
+exercise those numerical operations directly.
+
+Triangulation, feature-error elimination, measurement compression, feature-history
+management, initialization policy, frontend changes, replay,
+event scheduling and real-time integration are deferred work, not deliverables
+of this mathematical implementation sequence. The broader local VINS milestone
+remains recorded below; it does not expand the current scope.
 
 The [MSCKF formulation](spec/architecture/msckf-formulation.md) and its
 [requirement allocation](spec/requirements/software/local-vio.md) own the model.
@@ -32,39 +33,115 @@ importing formal-eskf's INS implementation does not establish that it implements
 this model. These Draft requirements and
 the revised conventional FEJ/identity-reset binding still require review.
 
-| Order / stable ID | Deliverable | Completion boundary |
+### Current scope: commit-sized mathematical actions
+
+Each numbered row is one planned implementation/review unit, normally one commit
+including its focused tests and requirement mapping. Existing VINS IDs retain their
+meaning; suffixes split a broad item without renumbering requirement IDs. Execute
+in the displayed order. A newly discovered prerequisite is reported against its
+owning row rather than silently replacing the plan.
+
+The Solà/OpenVINS comparison is available in the design review. Start with
+repeatable equation checks, not another general literature survey. Bind an action
+to the affected Draft clauses before implementation; resolve its open model or
+numerical choices explicitly. Unrelated profile gaps need not block independent
+state/layout work. Formula verification continues with each numerical module.
+
+| Order / action | Deliverable / requirement owner | Acceptance before review and commit |
 |---|---|---|
-| 1 / VINS-01 | Review the first estimator profile and consistency design. | Select capacities/workspaces, startup assumptions, interval/noise evaluation, geometry/noise/gate criteria and failure outcomes. Review the complete conventional-FEJ/Exp/identity-reset binding and its approximation limits before dependent production code; update affected Draft contracts explicitly if the design changes. |
-| 2 / VINS-LIT | Cross-check the design against MSCKF/VINS literature. | Build a source inventory covering foundations and relevant recent methods; review every estimator design area against primary equations and assumptions. Resolve unsupported adaptations, especially FEJ/reset, before dependent production code. Deliver a decision matrix and required design revisions for owner review. |
-| 3 / VINS-02 | Bounded joint state and layout. | Current IMU state, time, clone identities, full `D=15+6N` covariance and required FEJ caches have explicit ownership. Zero/full-capacity and block-index tests pass; OpenCV types do not enter the numerical core. |
-| 4 / VINS-03 | Stationary initialization. | Use a qualified sensor window to establish gravity-aligned attitude, gyro-bias estimate and declared velocity/accelerometer-bias priors, with justified initial covariance. Origin/yaw are local gauge choices. Reject an unsuitable window without claiming that all biases or motion are observable from stationary IMU alone. |
-| 5 / VINS-04 | IMU nominal and joint-covariance propagation. | Implement endpoint averaging/interpolation, analytical held-body-input mean, ordinary derivative, full FEJ transition and Gd*(Qc/h)*Gd^T with consistent frozen references. Verify coefficient evaluation, source-order translation, zero-rate limits, cross-blocks and image-time segment recurrence; do not require split/unsplit Qd equality. Split mean propagation and covariance propagation into separate reviewable changes. |
-| 6 / VINS-05 | Pose clone augmentation and removal. | Clone at the actual image time; retain all IMU/clone and clone/clone covariance blocks and corresponding frozen first estimates. Test middle-clone removal, bounded capacity and exact PSD/singular augmentation semantics. |
-| 7 / VINS-06 | Feature-history ownership and consumption. | Associate observations with stable image/clone IDs; retain bounded histories, handle track loss and pending clone retirement, and prepare once-only fusion records. Failed/retried updates and reused storage cannot rebind or double-consume observations. |
-| 8 / VINS-07 | Projection, triangulation and Jacobians. | Implement fixed extrinsics/lever arm, raw-pixel distortion/projection, bounded pointwise inverse and triangulation/refinement, and current/frozen linearization bindings. Independent synthetic scenes verify camera-domain limits, derivatives, pure rotation, low parallax and invalid depth. Camera projection/inverse and triangulation can be reviewed separately. |
-| 9 / VINS-08 | MSCKF visual constraints. | Assemble/whiten matching residual and Jacobian rows, eliminate feature error, apply per-feature innovation gates and bound batches/compression. Check annihilation and information identities; rejected/empty constraints do not become measurements. |
-| 10 / VINS-09 | Joint correction, injection and reset. | SPD solve and Joseph update modify current IMU and all clones through the full covariance. Apply Hamilton Exp injection and the declared identity-reset approximation, retaining first estimates and all Joseph cross-blocks. Candidate failure preserves the complete pre-correction transaction. |
-| 11 / VINS-RT | Real-time execution for control consumers. | Analyze CPU headroom and stage latency first, estimate sustainable IMU/visual/output rates, and identify the limiting resource. Select scheduling, deadlines and overload behavior from that evidence; qualify the integrated result in VINS-10/11. See the timing scope below. |
-| 12 / VINS-10 | Local estimator event loop and synthetic integration. | Integrate IMU coverage, image-time propagation, cloning, track selection, correction, consumption and retirement. A known synthetic trajectory runs through the entire estimator; test lost vision, duplicate/out-of-order input, missing IMU, capacity limits and failures/retries. |
-| 13 / VINS-11 | EuRoC VINS replay and trajectory evaluation. | Connect the existing reader and CPU frontend to the estimator; export time/frame/validity-bound state, trajectory plots, failures and latency. Run the selected sequence from a qualified startup window, not only the 100-frame frontend benchmark. Ground truth never initializes or corrects the estimator in the normal replay. |
-| 14 / VINS-12 | Review and pin the first VINS regression profile. | Compare IMU-only and visual-inertial estimates, trajectory ATE/RPE, attitude/velocity errors, valid coverage and numerical health. Fix timestamp/frame alignment without free scale fitting, inspect failure cases, and validate additional sequences not used for tuning. Set reviewed thresholds before accepting a compact baseline; retain host/build/input identities. |
+| 1 / VINS-01.1 | Persist the formula-verification baseline and obligation inventory / SW-MSCKF, VINS-LIT. | Map equation/claim, assumptions, requirement, independent reference and intended test/proof method. Retain runnable convention, Jacobian, FEJ gauge, source-order and limiting-case checks already explored; name unsupported claims. Reference code must not call the production operation it judges. This creates reproducible checks, not a claim that all formulas are formally proved. |
+| 2 / VINS-02 | Joint state, layout and workspace ownership / M-STATE. | Bind backend and peak clone capacity at compile time; retain runtime N and D=15+6N. Store IMU/clones, complete covariance, timestamps, identities and FEJ caches. Test zero/partial/full capacity, invalid counts, input-state validation, preserved cross-blocks and measured storage. No OpenCV types, hot-path allocation or hidden large automatic temporaries. |
+| 3 / VINS-04.1 | IMU interval arithmetic / M-PROPAGATE. | Given caller-supplied bracketing samples and interval boundaries, compute interpolation, endpoint averages and bias-corrected held inputs. Check interpolation bounds, units, finite values, zero/reversed intervals and bias changes between segments. Buffer coverage, sample selection and scheduling belong to later integration. |
+| 4 / VINS-04.2 | Analytical nominal propagation / M-PROPAGATE. | Implement A1/A2 and Hamilton Exp using shared math. Compare against independent high-precision integration, zero-rate limits and identical-held-input composition. Initial velocity feeds position; biases/clones are unchanged. Bound coefficient approximation on the admitted domain and preserve state on failure. |
+| 5 / VINS-04.3 | FEJ covariance propagation / M-PROPAGATE, M-FEJ. | Implement B1/B2, full Psi and Gd*(Qc/h)*Gd^T with the selected frozen references. Verify ordinary derivatives separately from FEJ, all bias/noise blocks, density/time scaling, source-order translation and IMU/clone cross-covariances. Test segment recurrence without requiring unsplit-Qd equality; publish mean/covariance/time/FEJ together. |
+| 6 / VINS-09 | Joint correction, injection and reset / M-CORRECT. | Use an SPD solve and Joseph covariance update; inject all IMU/clone means with Hamilton Exp and apply the selected identity reset. Verify cross-blocks, unchanged first estimates, correction limits and failure atomicity. Compare exact Joseph identities and physical-reset discrepancy separately; do not import the formal-eskf reset behavior. Compose production propagation, cloning and correction in synthetic numerical tests using supplied states and observations, without adding an event loop. |
+| 7 / VINS-05 | Clone augmentation and removal / M-CLONE. | Implement deterministic pose duplication and retained-coordinate selection, including nominal/FEJ identities and full cross-covariance. Test middle-clone removal, capacity boundaries and valid singular PSD covariance. The low-level removal contract requires the caller to discharge pending-observation ownership. |
+| 8 / VINS-07.1 | Camera model and visual Jacobians / M-VISUAL, M-FEJ. | Implement radial-tangential raw-pixel projection, bounded pointwise inverse, extrinsics/lever arm and current/frozen factors. Fix the inverse domain, iteration cap and residual limits before accepting it. Compare derivatives with an independent reference, and test round trips, off-axis/zero-distortion/invalid-depth cases and both reference FEJ distortion policies without silently changing the selected one. |
 
-Complete VINS-LIT after VINS-01, then review the resulting formulation/profile
-before VINS-02 implementation. Small numerical checks support design exploration;
-they do not establish literature alignment, production-code or trajectory
-acceptance. Preserve these IDs when recording progress; expose newly
-discovered work as a dependency or extension instead of silently replacing this
-sequence. A row is an acceptance boundary, not a requirement to combine all its
-code into one commit. Each change includes the relevant contract, implementation,
-tests and self-review before submission for review.
+Measurement QR compression is an optional efficiency step, deferred from this
+mathematical scope. Triangulation and feature-error nullspace projection are also deferred.
+Using QR for nullspace projection remains distinct from measurement compression. VINS-09 accepts
+bounded residual/Jacobian/noise inputs without requiring measurement compression.
+The existing Draft profile budgets compressed batches. Before implementing an
+uncompressed correction, VINS-02/09 must bind its measurement-row capacity and
+workspace explicitly; the compressed workspace bound cannot be reused or the
+profile silently changed.
 
-The revised camera binding adds a prerequisite to VINS-03's visual startup window
-and VINS-07/11: expose original EuRoC images and calibration, keep ORB observations
-in raw pixels, use pointwise undistortion for essential-matrix geometry, and bind
-the geometric metric/threshold units. Update coordinate metadata/contracts and
-tests together; qualify raw-image tracking/noise and benchmark results separately
-from existing remapped-image runs. This migration is pending, not part of the
-completed frontend. See the [ORB target](spec/profiles/orb-frontend.md#local-vins-target).
+### State capacity and C++ boundaries
+
+Use a simple template binding for the linalg backend and `MaxClones`, meaning
+**peak simultaneous clone capacity**, with one resolved state/covariance layout.
+The covariance dimension capacity is `15+6*MaxClones`; the active error dimension
+remains `15+6*N`. These are error coordinates, not a flattened nominal-state
+layout: nominal IMU/clone attitudes retain four quaternion coefficients each.
+Do not instantiate a different filter type for every runtime N, or turn the filter
+steps into traits/CRTP/policy dispatch. Follow the existing C++ subset and reuse
+[BoundedMatrix](../include/formal_gvins/linalg/bounded.hpp).
+
+The first profile retains 10 clones after an image transaction and needs an
+additional augmentation slot: `MaxClones=11`, peak D=81. The covariance coefficient
+storage alone is 52,488 bytes for double. Measure state, candidate, history and
+workspace storage separately; fixed capacity does not by itself bound stack use
+or establish a real-time deadline.
+
+`BoundedMatrix::resize` clears its active rectangle. Clone augmentation/removal
+must explicitly preserve the required blocks through a candidate/workspace; it
+cannot use resize as a data-preserving container operation. Inactive coefficients
+are not operands. Capacity overflow is reported before mutation, with the state,
+FEJ cache and observation ledger contracts kept distinct and composable.
+
+### Per-action acceptance and commit policy
+
+- Reuse the existing scalar, linalg, SO(3), CMake/CTest and benchmark facilities.
+  Add missing operations only for a demonstrated caller; keep backend internals
+  and OpenCV outside the filter equations. Use Eigen/double for the first complete
+  profile; exercise applicable generic paths separately for other supported
+  precision/backend profiles without claiming identical numerical behavior.
+- Before coding a formula, fix its input/output frames, error coordinates,
+  linearization points, approximation domain and requirement-owned failures.
+  Exact symbolic identities, high-precision references and finite differences
+  have different scopes. Compare FEJ factors with their frozen-point definitions,
+  not with a derivative of the current residual that they intentionally replace.
+- Each numerical action extends the independent reference checks and tests the
+  actual C++ operation. Include adversarial/boundary cases, retained cross-blocks,
+  failure preservation and relevant non-allocation/resource checks. Run targeted
+  tests and read-only formatting checks; add sanitizer coverage for new indexing
+  and ownership paths. Do not replace failed cases with mocks or weaken tolerances.
+- Add the callable workload and relevant accuracy/cost metric to B-01 with the
+  module; integrated timing qualification remains deferred under VINS-RT. Keep execution logs and measurements in
+  ignored output; commit reusable methods, fixtures and reviewed mappings.
+- Self-review must state what changed, why the equations/implementation correspond,
+  whether the selected behavior is preserved and what remains unproved. The owner has authorized committing each completed mathematical action after
+  self-review and proceeding to the next. This does not authorize deferred work
+  or approve Draft requirements.
+
+This sequence verifies equations and implements mathematical filter operations; it does not
+claim complete formal verification. The repository currently has no local
+Lean/ESBMC suite. Exact mathematical proofs and bounded source checks remain
+explicit obligations in the [verification policy](spec/verification.md), with a
+separate tooling/proof workstream to be scoped from action 1's inventory. Importing
+formal-eskf primitives or passing reference tests does not discharge them. No
+full-image, full-trajectory or maximum-dimension symbolic unrolling is assumed.
+
+### Deferred optimization and local VINS integration
+
+These existing items are retained for later planning and are outside the current
+mathematical implementation scope. They require a subsequent instruction to
+start. End-to-end trajectory/consistency qualification does not replace the
+focused equation and numerical composition checks in the mathematical actions.
+
+| Action | Deliverable / requirement owner | Later acceptance boundary |
+|---|---|---|
+| VINS-07.2 | Triangulation and point refinement / M-VISUAL. | Use normalized bearings for rank-aware initialization and the selected weighted raw-pixel XYZ refinement. Check known 3D scenes, pure rotation, low parallax, conditioning, behind-camera points and bounded nonconvergence; accept no invented landmark prior. Temporary feature storage remains outside the filter state. |
+| VINS-08.1 | Per-feature visual constraint and gate / M-CONSTRAINT. | Assemble matching residual/Hx/Hf rows, whiten together, eliminate the feature and gate with the actual retained dimension. Verify annihilation, whitened covariance and least-squares equivalence; exercise correlated noise, rank failure, gate equality and solver failure. |
+| VINS-08.2 | Bounded batch accumulation and QR compression / M-CONSTRAINT. | Gate features before incremental compression; retain state-column identity and all informative rows. Verify H^T*H and H^T*r invariance, empty/full batches and overflow behavior. Measure the profile's bounded scratch use; do not allocate the full uncompressed innovation system. |
+| VINS-06 | Feature-history ownership / V-TRACK, M-LIFECYCLE. | Bind observations to stable clone/image/camera IDs and retain once-only consumption/retirement records. Test lost/continuing tracks, reused slots, pending clone retirement, history/batch capacity and failed/retried updates. Frontend descriptor ownership stays separate. |
+| VINS-10.1 | C++ filter interface and synthetic integration / SW-MSCKF, M-LIFECYCLE. | Connect state validation, propagation, cloning, track selection, constraints, correction and retirement through direct calls. Begin from explicitly supplied valid states. Known synthetic IMU/pixel sequences exercise real production functions; test no-update, degeneracy, delayed/duplicate input and failure transactions. No dataset truth enters the estimator API. |
+| VINS-03 | Stationary-start initializer / M-STATE. | Implement the selected IMU/visual-window admission, gravity/yaw convention, bias priors, coupled initial covariance and propagation from the initialization timestamp. Test false stationarity, insufficient tracks, unavailable coverage and invalid priors with synthetic fixtures; empirical threshold qualification remains separate. |
+| VINS-11.1 | Raw-image EuRoC/frontend migration / V-ACQUISITION, V-ORB. | Expose original images/calibration and raw feature coordinates; use pointwise undistortion for geometric screening with explicit metric/threshold units. Verify observation identity, coordinate/calibration preservation and inverse failures. Distinguish new raw-image results from earlier remapped-image benchmark baselines. |
+| VINS-11.2 | EuRoC VINS replay and trajectory scoring / SW-MSCKF. | Run the C++ filter and initializer with actual frontend observations. Export identified trajectory, update counts, validity/rejection/failure reasons and timing. Score ATE/RPE and attitude/velocity errors with declared timestamp/frame alignment and no free scale fitting; ground truth is evaluation-only. |
+| VINS-12 | Integrated regression and consistency qualification / SW-MSCKF. | Extend synthetic sequences with controlled noise and repeated FEJ updates; evaluate observable-subspace or explicitly anchored NEES. Compare IMU-only and VINS, weak geometry/lost vision, and held-out EuRoC data. Select justified accuracy/coverage/numerical thresholds before pinning a baseline; retain failed cases rather than relaxing bounds to pass. |
+| VINS-RT | Timing, CPU headroom and real-time execution binding / B-01, M-LIFECYCLE. | Aggregate per-module measurements, test peak capacities and sensor-paced execution, and identify the camera/CPU/GPU/I/O bottleneck. Select budgets, queue/overload policy and output cadence from evidence; test deadlines, backlog and state age. Separate host and Orin qualification; measured maxima are not WCET proofs. |
 
 ### VINS-LIT: Literature-based design review
 
@@ -129,10 +206,11 @@ consistency/accuracy experiments into VINS-10/12.
 
 ### VINS-RT: CPU headroom, sustainable rates and bottlenecks
 
-Start after VINS-09 with the implemented modules and B-01 measurements. This task
-owns estimator scheduling and timely state delivery to an independent flight
-controller; it does not add an attitude/rate controller. Initial estimates precede
-integration; final sustainable-rate claims require VINS-10/11 execution.
+Collect B-01 measurements as each module is implemented, and assess initial CPU
+headroom after VINS-09 before integration. The deferred VINS-RT action uses the integrated VINS-10/11
+workloads to select and qualify real-time execution. This task owns estimator
+scheduling and timely state delivery to an independent flight controller; it does
+not add an attitude/rate controller.
 
 1. Measure preprocessing, extraction, matching, IMU propagation, triangulation,
    constraint reduction, correction/reset and output handling separately. Include
