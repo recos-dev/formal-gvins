@@ -66,3 +66,28 @@ for duration in (1, 1000, 5_000_000, 10_000_000):
         if case==2:
             np.testing.assert_allclose(actual[15:240].reshape(15,15),physical_transition(rotation(angle),a,w,h),atol=1e-11,rtol=1e-11)
 print('Production FEJ/Qd/joint covariance: 32 cases including correlated noise, zero noise and differing first estimates')
+
+for m in (1,3,7):
+    for trial in range(5):
+        H=rng.normal(size=(m,27)); A=rng.normal(size=(m,m))
+        V=A@A.T+.1*np.eye(m); residual=rng.normal(size=m)*.01
+        data=np.r_[H.ravel(),V.ravel(),residual]
+        text=str(m)+' '+' '.join(format(x,'.17g') for x in data)+'\n'
+        result=subprocess.run([sys.argv[1],'correct'],input=text,text=True,capture_output=True,check=True)
+        actual=np.fromstring(result.stdout,sep=' ')
+        P=.1*np.eye(27)+.0001*np.outer(np.arange(1,28),np.arange(1,28))
+        K=np.linalg.solve(H@P@H.T+V,H@P).T
+        delta=K@residual
+        # Conditional covariance is algebraically equivalent to Joseph, but evaluated independently.
+        Pc=P-K@H@P
+        np.testing.assert_allclose(actual[:27],delta,atol=1e-12,rtol=1e-12)
+        np.testing.assert_allclose(actual[27:756].reshape(27,27),Pc,atol=1e-12,rtol=1e-12)
+        expected=np.r_[np.array([1,-2,3])+delta[:3],np.array([.4,.2,-.1])+delta[3:6],
+                       (rotation([.2,-.1,.3])@rotation(delta[6:9])).ravel(),
+                       np.array([-.01,.02,.03])+delta[9:12],np.array([.001,.002,.003])+delta[12:15]]
+        for c in range(2):
+            offset=15+6*c
+            expected=np.r_[expected,np.array([c-1,2,3])+delta[offset:offset+3],
+                           (rotation([.1*(c+1),.2,.3])@rotation(delta[offset+3:offset+6])).ravel()]
+        np.testing.assert_allclose(actual[756:],expected,atol=1e-12,rtol=1e-12)
+print('Production correction: 15 correlated-noise cases; full Joseph covariance and all IMU/clone means')

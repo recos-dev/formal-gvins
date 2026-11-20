@@ -71,3 +71,15 @@ both sides of the reference small-rate threshold. Native tests exercise peak clo
 capacity, preserved clone blocks, timestamps, workspace alias rejection and
 transactional failure. Test tolerances follow the profile's 1e-11 transition and
 1e-9 relative Qd limits; sampled agreement is not a uniform error proof.
+
+## Generic correction
+
+`correct` consumes externally assembled r/H/V and implements the joint Joseph
+update, all-pose Hamilton injection and identity reset. `CorrectionWorkspace`
+separately bounds measurement rows; compressed-batch storage is not assumed.
+Native cases include N=0, peak clones, singular PSD P, invalid V with positive S,
+last-clone angle rejection, non-finite inputs and late overflow atomicity. The
+production oracle checks correlated V, every mean and the complete posterior
+against a separately evaluated conditional-covariance identity. First estimates
+remain unchanged. These tests do not supply MSCKF feature constraints or validate
+an end-to-end visual estimator.
