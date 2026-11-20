@@ -7,8 +7,8 @@ dependencies. Directory placement alone expresses neither.
 
 This initial set covers numerical foundations, coordinate conventions and the
 ORB/feature-track boundary. It is not a complete MSCKF or SLAM specification.
-Joint-state transitions, QR/nullspace operations, consistency policy, map
-management, relocalization and loop correction still require allocated contracts.
+Joint-state transitions, consistency policy, map management, relocalization
+and loop correction still require allocated contracts.
 
 ## Common contracts
 
@@ -27,6 +27,15 @@ management, relocalization and loop correction still require allocated contracts
 |---|---|---|
 | `F-SCALAR` | [Checked scalar operations](requirements/math/scalar/operations.md) | Draft |
 | `F-SOLVE` | [SPD linear solve](requirements/math/linalg/spd-solve.md) | Draft |
+| `F-LINALG` | [Fixed matrix/vector operations](requirements/math/linalg/matrix-operations.md) | Draft |
+| `F-NORMALIZE` | [Checked vector normalization](requirements/math/linalg/vector-normalization.md) | Draft |
+| `F-BOUNDED` | [Bounded active matrices](requirements/math/linalg/bounded-matrices.md) | Draft |
+| `F-CHOLESKY` | [Lower Cholesky factor](requirements/math/linalg/cholesky.md) | Draft |
+| `F-TRIANGULAR` | [Lower-triangular solve](requirements/math/linalg/triangular-solve.md) | Draft |
+| `F-WHITEN` | [Covariance whitening](requirements/math/linalg/whitening.md) | Draft |
+| `F-QR` | [Orthogonal reduction and rank](requirements/math/linalg/qr-reduction.md) | Draft |
+| `F-LEAST-SQUARES` | [Full-column-rank least squares](requirements/math/linalg/least-squares.md) | Draft |
+| `F-NULLSPACE` | [Left-nullspace action](requirements/math/linalg/nullspace-projection.md) | Draft |
 | `Q-IDENTITY` | [Quaternion identity](requirements/math/quaternion/identity.md) | Draft |
 | `Q-MUL` | [Hamilton multiplication](requirements/math/quaternion/multiplication.md) | Draft |
 | `Q-INVERSE` | [Quaternion inverse](requirements/math/quaternion/inverse.md) | Draft |
@@ -55,10 +64,11 @@ when that scope is defined.
 
 ## Reuse and evidence
 
-The mathematical requirements retain IDs and operation semantics from
+The original reusable mathematical requirements retain IDs and operation semantics from
 [formal-eskf revision 6e4ffb5](https://github.com/recos-dev/formal-eskf/tree/6e4ffb5bc5932804c177cbacfd5a10e3126f981a/docs/spec/requirements/math).
-Project names, links and application scope are adapted. The four common numerical
-contracts are tailored from the
+Project names, links and application scope are adapted. The additional linalg
+contracts are local allocations; F-SOLVE also covers active solves. The four
+common numerical contracts are tailored from the
 [same revision](https://github.com/recos-dev/formal-eskf/tree/6e4ffb5bc5932804c177cbacfd5a10e3126f981a/docs/spec/requirements/common):
 ESKF state checks, configuration macros and historical evidence are not inherited.
 The project code and documentation use [Apache-2.0](../../LICENSE).

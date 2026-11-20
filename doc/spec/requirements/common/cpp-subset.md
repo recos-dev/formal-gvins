@@ -42,7 +42,7 @@ For new or redesigned estimator/runtime code:
 
 - Do not select estimator behavior with `std::is_same`, `std::conditional` or their modern aliases inside sensor/fusion operations. Resolve type relationships at the configuration boundary and use explicit overloads for different behaviors. Simple type-validity assertions at numeric/backend boundaries remain permitted.
 - Do not independently pass `State`, `Error` and their dimensions through every helper when those choices describe one configuration. Independent mathematical dimensions, such as measurement size, remain valid template parameters. There is no arbitrary numeric limit on template parameters.
-- Do not introduce generic callable/policy parameters merely to inject an optional estimator stage, or use `std::nullptr_t` as a policy type flag. Use a named operation and an explicit compile-time choice. Preserve existing requirements that disabled features incur no runtime dispatch and that gain constraints affect both state and covariance consistently.
+- Do not introduce generic callable/policy parameters merely to inject an optional estimator stage, or use `std::nullptr_t` as a policy type flag. Use a named operation and an explicit compile-time choice. Algorithm-specific effects and acceptance belong to the owning requirement.
 - Keep long dependent-type spellings such as `typename Configuration::template NominalState<Linalg>` at type/configuration boundaries. Use resolved aliases in estimator interfaces and bodies; do not hide the relationship behind additional layers of traits or alias forwarding.
 - Long argument lists and forwarding are not violations by themselves. Keep each input's purpose and each layer's interface/contract responsibility clear; do not add layers solely to combine and then redispatch already distinct estimator paths.
 
@@ -140,8 +140,9 @@ Storage capacities and maximum loop bounds are compile-time constants. Active
 clone counts, observation counts and logical matrix dimensions may vary at runtime
 within those capacities. APIs shall define valid extents and reject or prevent
 out-of-capacity operations before access. Bounded loops may exit early; their
-maximum work must remain statically bounded. This permits a future bounded-size
-matrix API; it does not claim that the initial fixed-size layer provides one.
+maximum work must remain statically bounded. Fixed and active-size matrix APIs
+may coexist; [F-BOUNDED](../math/linalg/bounded-matrices.md) owns active extents
+and capacity behavior.
 
 Estimator state, covariance, and numerical workspace have statically bounded sizes. Large temporary storage is visible in a workspace definition or stack-usage report.
 
