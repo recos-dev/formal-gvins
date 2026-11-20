@@ -51,3 +51,12 @@ input arithmetic; `tests/test_msckf_imu.cpp` checks integer-epoch interpolation,
 endpoint reuse, bias recomputation, original-gap limits, domains and atomicity.
 The caller supplies the raw bracket, prevents interior-sample skipping and owns
 buffer/time scheduling. No sensor stream or noise-correlation claim is made.
+
+## Nominal propagation
+
+`predict_nominal` implements the held-body-input mean. Native tests check old
+velocity, unchanged biases, aliasing, split-interval composition and failure.
+`msckf_cpp_reference` sends boundary/random inputs to the production probe and
+compares against the independent augmented-exponential oracle. The double profile
+uses 1e-12 coefficient tolerances for this mean comparison; this does not certify
+uniform floating-point bounds or arbitrary time-varying input accuracy.
