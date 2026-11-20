@@ -25,6 +25,8 @@ trial outputs stay outside versioned documentation. Git owns revision history.
 
 ## Source attribution
 
-The writing template, coding guide, C++ subset and formatter configuration are
+The writing template, coding guide, C++ subset, formatter configuration,
+reusable mathematical requirements and tailored numerical policies are
 adapted from [formal-eskf revision 6e4ffb5](https://github.com/recos-dev/formal-eskf/tree/6e4ffb5bc5932804c177cbacfd5a10e3126f981a).
-The project code and documentation use [Apache-2.0](../LICENSE).
+The project code and documentation use [Apache-2.0](../LICENSE). New vision and
+frame contracts are project-authored proposals, indexed with their Draft status.
