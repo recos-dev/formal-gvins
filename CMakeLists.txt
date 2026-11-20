@@ -130,7 +130,7 @@ if(BUILD_TESTING)
     endfunction()
 
     add_numeric_test(scalar_standard tests/test_scalar_standard.cpp formal_gvins)
-    foreach(SUITE IN ITEMS linalg linalg_spd linalg_bounded so3 so3_jacobian msckf_state msckf_imu msckf_prediction msckf_covariance msckf_correction)
+    foreach(SUITE IN ITEMS linalg linalg_spd linalg_bounded so3 so3_jacobian msckf_state msckf_imu msckf_prediction msckf_covariance msckf_correction msckf_clones)
         if(FORMAL_GVINS_BUILD_EIGEN_BACKEND)
             add_numeric_test(${SUITE}_eigen tests/test_${SUITE}.cpp formal_gvins_eigen)
             target_compile_definitions(${SUITE}_eigen PRIVATE EIGEN_RUNTIME_NO_MALLOC)

@@ -83,3 +83,13 @@ production oracle checks correlated V, every mean and the complete posterior
 against a separately evaluated conditional-covariance identity. First estimates
 remain unchanged. These tests do not supply MSCKF feature constraints or validate
 an end-to-end visual estimator.
+
+## Clone operations
+
+`augment_clone` copies the IMU pose and its distinct first estimate using the
+complete duplication congruence. `remove_clone` selects the retained principal
+submatrix. Native tests inspect every retained/copy coefficient, peak/zero capacity,
+identities/times, roundoff canonicalization and failure preservation. A synthetic
+sequence composes prediction, supplied-position correction, cloning and removal.
+The caller still owns observation retirement and session-wide identity; this is
+not an implemented feature lifecycle or a visual-observability experiment.
