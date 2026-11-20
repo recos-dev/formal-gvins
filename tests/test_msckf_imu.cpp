@@ -51,5 +51,14 @@ int main()
     t.expect(succeeded(msckf::validate_interval(interval)), "imu", "rate bound equality");
     interval.omega(0) = 10.1;
     t.expect(msckf::validate_interval(interval) == Status::domain_error, "imu", "rate bound rejection");
+    auto const saved = interval;
+    right.angular_rate(0) = 0;
+    left.specific_force(0) = std::numeric_limits<double>::max();
+    right.specific_force(0) = std::numeric_limits<double>::max();
+    ba(0) = -std::numeric_limits<double>::max();
+    t.expect(msckf::prepare_interval(left, right, ba, bg, interval) == Status::non_finite_result &&
+                 interval.start_ns == saved.start_ns && interval.end_ns == saved.end_ns &&
+                 linalg::max_abs(interval.a - saved.a) == 0 && linalg::max_abs(interval.omega - saved.omega) == 0,
+             "imu", "finite-input bias subtraction overflow preserves complete interval");
     return t.failures() == 0 ? 0 : 1;
 }

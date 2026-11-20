@@ -5,8 +5,9 @@
 The [index](../spec/README.md) owns requirement discovery and Draft status;
 [verification policy](../spec/verification.md) owns evidence acceptance. This
 inventory maps each requirement once to current production symbols/test sources
-and remaining work. It covers bounded linalg, the frontend and the EuRoC adapter;
-each execution record must independently bind actual source content/revision.
+and remaining work. It covers bounded linalg, MSCKF mathematical operations, the
+frontend and the EuRoC adapter; each execution record must independently bind
+actual source content/revision.
 No test or proof execution is claimed by this document.
 
 ## Scope
@@ -27,7 +28,7 @@ and the two development profiles are not counted as requirements.
 operation exists, not that every clause/profile has accepted evidence. **Partial**
 means only part of the boundary is implemented. **Planned** means the responsible
 component/composition is absent. The corresponding counts are 6 policy, 24 present,
-5 partial and 11 planned. Do not interpret these as a completion percentage.
+11 partial and 5 planned. Do not interpret these as a completion percentage.
 
 No local Lean/ESBMC suite or requirement-to-execution registry is present. Imported
 native tests do not transfer formal-eskf's proofs. Current mathematical acceptance
@@ -88,16 +89,20 @@ frontend tests do not establish physical association or navigation accuracy.
 
 ## Local MSCKF
 
+Source paths below are relative to `include/formal_gvins/`. See the
+[mathematical verification inventory](msckf-verification.md) for test symbols,
+commands, profile limits and distinct proof obligations.
+
 | Requirement | Implementation scope | Source / test pointers | Review or evidence gap |
 |---|---|---|---|
-| [SW-MSCKF](../spec/requirements/software/local-vio.md) | Planned | [Formulation](../spec/architecture/msckf-formulation.md); no joint estimator. | Review eight child allocations, dependencies and composition acceptance before implementation. |
-| [M-STATE](../spec/requirements/msckf/state.md) | Planned | No joint-state/initializer implementation. | Choose initialization/prior validity, capacities and numerical profile; verify layout and invalid-candidate preservation. |
-| [M-PROPAGATE](../spec/requirements/msckf/propagation.md) | Planned | Formulation only; numerical primitives are available. | Qualify the bounded coefficient/noise profile; establish held-input derivatives, Gd and density/time scaling, FEJ-reference binding, source-order translation and segment recurrence. |
-| [M-CLONE](../spec/requirements/msckf/clones.md) | Planned | No clone manager; bounded gather is only a primitive. | Implement identity/covariance/cache augmentation and removal; verify PSD and all cross-blocks. |
-| [M-VISUAL](../spec/requirements/msckf/visual-geometry.md) | Planned | No estimator triangulation/Jacobian module; frontend essential-matrix screening is separate. | Implement the raw-pixel distortion/projection chain, bounded pointwise inverse and triangulation. Review noise/refinement profile; prove current/frozen derivatives and test camera-domain/geometric degeneracy. |
+| [SW-MSCKF](../spec/requirements/software/local-vio.md) | Planned | [Formulation](../spec/architecture/msckf-formulation.md); no complete visual estimator. | Review eight child allocations, dependencies and full visual composition acceptance. |
+| [M-STATE](../spec/requirements/msckf/state.md) | Partial | State layout/admission and FEJ storage in `msckf/state.hpp`; native state tests. | Initializer/physical priors and exact PSD justification remain external; numerical checks do not establish them. |
+| [M-PROPAGATE](../spec/requirements/msckf/propagation.md) | Partial | Interval arithmetic and nominal/joint prediction in `msckf/imu.hpp` and `msckf/prediction.hpp`; native and independent-reference tests. | Raw buffer/coverage integration, exact source/convention proof, uniform rounding bounds and stochastic model qualification remain. |
+| [M-CLONE](../spec/requirements/msckf/clones.md) | Partial | `augment_clone` / `remove_clone` in `msckf/clones.hpp`; complete duplication/selection and composition tests. | Observation retirement/session identity remains a caller obligation; exact PSD/selection proofs remain. |
+| [M-VISUAL](../spec/requirements/msckf/visual-geometry.md) | Partial | Raw projection, distortion, residual and frozen Jacobians in `msckf/camera.hpp`; finite-difference/gauge reference tests. | Pointwise inverse, triangulation/refinement and assembled feature constraints are deferred. Camera/noise qualification and exact derivatives remain. |
 | [M-CONSTRAINT](../spec/requirements/msckf/constraints.md) | Planned | No assembled feature-update pipeline; whitening/QR/nullspace primitives exist. | Bind rank/conditioning/gate/compression choices; verify joint transforms and statistical premises. |
-| [M-CORRECT](../spec/requirements/msckf/correction.md) | Planned | No joint correction; SPD/SO(3) primitives exist. | Implement Joseph/all-pose Exp injection, identity reset and atomic publication; prove selected-model composition and qualify reset approximation/numerical residuals. |
-| [M-FEJ](../spec/requirements/msckf/consistency.md) | Planned | Revised conventional-FEJ Draft only; no FEJ cache/transition implementation. | Owner review of the full FEJ/Exp/identity-reset binding, correction limits, frozen-gauge proofs and statistical studies. |
+| [M-CORRECT](../spec/requirements/msckf/correction.md) | Partial | Generic `correct` in `msckf/correction.hpp`; joint Joseph, all-pose Exp injection and identity reset; native/oracle checks. | Feature constraints/consumption integration, exact identities, uniform numerical bounds and reset statistical qualification remain. |
+| [M-FEJ](../spec/requirements/msckf/consistency.md) | Partial | First-estimate storage, full frozen transition and camera Jacobians; gauge and mathematical sequence tests. | Exact gauge/source proofs, approved approximation domains and repeated visual-update statistical qualification remain. |
 | [M-LIFECYCLE](../spec/requirements/msckf/lifecycle.md) | Planned | No local-estimator runtime. | Bind ordering/capacity/loss/recovery policies; implement and verify full transaction sequences. |
 
 ## Review order and unresolved decisions

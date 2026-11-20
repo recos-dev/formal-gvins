@@ -130,7 +130,9 @@ if(BUILD_TESTING)
     endfunction()
 
     add_numeric_test(scalar_standard tests/test_scalar_standard.cpp formal_gvins)
-    foreach(SUITE IN ITEMS linalg linalg_spd linalg_bounded so3 so3_jacobian msckf_state msckf_imu msckf_prediction msckf_covariance msckf_correction msckf_clones msckf_camera)
+    foreach(SUITE IN ITEMS linalg linalg_spd linalg_bounded so3 so3_jacobian
+            msckf_state msckf_imu msckf_prediction msckf_covariance msckf_correction
+            msckf_clones msckf_camera)
         if(FORMAL_GVINS_BUILD_EIGEN_BACKEND)
             add_numeric_test(${SUITE}_eigen tests/test_${SUITE}.cpp formal_gvins_eigen)
             target_compile_definitions(${SUITE}_eigen PRIVATE EIGEN_RUNTIME_NO_MALLOC)
@@ -147,7 +149,7 @@ if(BUILD_TESTING)
         set_target_properties(msckf_probe PROPERTIES CXX_EXTENSIONS OFF)
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(msckf_probe PRIVATE -Wall -Wextra -Wpedantic -Werror
-                -fno-exceptions -fno-rtti -fno-fast-math -ffp-contract=off)
+                -fno-exceptions -fno-rtti -fno-fast-math -ffp-contract=off -UNDEBUG)
         endif()
         add_test(NAME msckf_cpp_reference
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/reference/check_msckf_cpp.py"
@@ -155,5 +157,20 @@ if(BUILD_TESTING)
     endif()
     if(FORMAL_GVINS_BUILD_CMSIS_DSP_BACKEND)
         add_numeric_test(cmsis_dsp_storage tests/test_cmsis_dsp_backend.cpp formal_gvins_cmsis_dsp)
+    endif()
+endif()
+
+option(FORMAL_GVINS_BUILD_MATH_BENCHMARKS "Build the MSCKF mathematical operation benchmark" OFF)
+if(FORMAL_GVINS_BUILD_MATH_BENCHMARKS)
+    if(NOT FORMAL_GVINS_BUILD_EIGEN_BACKEND)
+        message(FATAL_ERROR "The math benchmark requires the Eigen backend")
+    endif()
+    add_executable(msckf_benchmark benchmark/math/msckf.cpp)
+    target_link_libraries(msckf_benchmark PRIVATE formal_gvins_eigen)
+    target_compile_definitions(msckf_benchmark PRIVATE EIGEN_RUNTIME_NO_MALLOC)
+    set_target_properties(msckf_benchmark PROPERTIES CXX_EXTENSIONS OFF)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(msckf_benchmark PRIVATE -Wall -Wextra -Wpedantic -Werror
+            -fno-exceptions -fno-rtti -fno-fast-math -ffp-contract=off -UNDEBUG)
     endif()
 endif()

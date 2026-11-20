@@ -39,18 +39,18 @@ template <typename Linalg>
 Status inject_pose(Pose<Linalg> & pose, linalg::Vector<Linalg, 3U> const & position_error,
                    linalg::Vector<Linalg, 3U> const & angle_error, typename Linalg::value_type maximum_angle)
 {
-    using Value = typename Linalg::value_type;
+    using value_type = typename Linalg::value_type;
     if (!(linalg::squared_norm(angle_error) <= maximum_angle * maximum_angle))
     {
         return Status::domain_error;
     }
     so3::UnitQuaternion<Linalg> increment;
-    Status status = so3::exp(angle_error, Value{0.5}, increment);
+    Status status = so3::exp(angle_error, value_type{0.5}, increment);
     if (!succeeded(status))
     {
         return status;
     }
-    status = so3::compose_normalized(pose.q_WB, increment, Value{0.5}, pose.q_WB);
+    status = so3::compose_normalized(pose.q_WB, increment, value_type{0.5}, pose.q_WB);
     if (!succeeded(status))
     {
         return status;
@@ -74,8 +74,8 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
         Tolerances<typename Linalg::value_type> const & tolerance, typename Linalg::value_type maximum_angle,
         CorrectionWorkspace<Linalg, MaxClones, MaxRows> & work)
 {
-    using Value = typename Linalg::value_type;
-    using Math = typename Linalg::scalar_math_type;
+    using value_type = typename Linalg::value_type;
+    using math_type = typename Linalg::scalar_math_type;
     if (&state == &work.candidate)
     {
         return Status::domain_error;
@@ -85,7 +85,7 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         return status;
     }
-    if (!Math::is_finite(maximum_angle) || maximum_angle < 0 || maximum_angle > Value{0.2})
+    if (!math_type::is_finite(maximum_angle) || maximum_angle < 0 || maximum_angle > value_type{0.2})
     {
         return Status::domain_error;
     }
@@ -120,7 +120,7 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         for (std::size_t j = 0; j < m; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < n; ++k)
             {
                 sum += work.candidate.P(i, k) * H(j, k);
@@ -132,7 +132,7 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         for (std::size_t j = 0; j < m; ++j)
         {
-            Value sum = work.V(i, j);
+            value_type sum = work.V(i, j);
             for (std::size_t k = 0; k < n; ++k)
             {
                 sum += H(i, k) * work.PHt(k, j);
@@ -157,12 +157,12 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     }
     for (std::size_t i = 0; i < n; ++i)
     {
-        Value sum = 0;
+        value_type sum = 0;
         for (std::size_t j = 0; j < m; ++j)
         {
             sum += work.K(i, j) * residual(j, 0);
         }
-        if (!Math::is_finite(sum))
+        if (!math_type::is_finite(sum))
         {
             return Status::non_finite_result;
         }
@@ -200,16 +200,16 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         for (std::size_t j = 0; j < n; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < m; ++k)
             {
                 sum += work.K(i, k) * H(k, j);
             }
-            work.A(i, j) = (i == j ? Value{1} : Value{0}) - sum;
+            work.A(i, j) = (i == j ? value_type{1} : value_type{0}) - sum;
         }
         for (std::size_t j = 0; j < m; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < m; ++k)
             {
                 sum += work.K(i, k) * work.V(k, j);
@@ -221,7 +221,7 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         for (std::size_t j = 0; j < n; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < n; ++k)
             {
                 sum += work.A(i, k) * work.candidate.P(k, j);
@@ -233,7 +233,7 @@ correct(State<Linalg, MaxClones> & state, linalg::BoundedMatrix<Linalg, MaxRows,
     {
         for (std::size_t j = 0; j < n; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < n; ++k)
             {
                 sum += work.AP(i, k) * work.A(j, k);

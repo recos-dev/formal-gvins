@@ -23,18 +23,18 @@ namespace detail
 /** Requires the admitted interval domain. Gamma tails are specified in local-vins.md. */
 template <typename Linalg> RotationIntegrals<Linalg> rotation_integrals(ImuInterval<Linalg> const & input)
 {
-    using Value = typename Linalg::value_type;
-    using Matrix = linalg::Matrix<Linalg, 3U, 3U>;
-    Value const h = input.duration();
-    Matrix const W = so3::hat(input.omega * h);
-    Matrix term1 = Matrix::identity();
-    Matrix term2 = term1 * Value{0.5};
-    Matrix gamma1 = term1;
-    Matrix gamma2 = term2;
+    using value_type = typename Linalg::value_type;
+    using matrix_type = linalg::Matrix<Linalg, 3U, 3U>;
+    value_type const h = input.duration();
+    matrix_type const W = so3::hat(input.omega * h);
+    matrix_type term1 = matrix_type::identity();
+    matrix_type term2 = term1 * value_type{0.5};
+    matrix_type gamma1 = term1;
+    matrix_type gamma2 = term2;
     for (std::size_t order = 1; order <= 10; ++order)
     {
-        term1 = (term1 * W) / static_cast<Value>(order + 1);
-        term2 = (term2 * W) / static_cast<Value>(order + 2);
+        term1 = (term1 * W) / static_cast<value_type>(order + 1);
+        term2 = (term2 * W) / static_cast<value_type>(order + 2);
         gamma1 = gamma1 + term1;
         gamma2 = gamma2 + term2;
     }
@@ -47,9 +47,9 @@ Status integrate_mean(ImuState<Linalg> const & input, ImuInterval<Linalg> const 
                       linalg::Vector<Linalg, 3U> const & gravity, RotationIntegrals<Linalg> const & integrals,
                       ImuState<Linalg> & output)
 {
-    using Value = typename Linalg::value_type;
-    constexpr Value minimum_quaternion_norm = Value{0.5};
-    Value const h = interval.duration();
+    using value_type = typename Linalg::value_type;
+    constexpr value_type minimum_quaternion_norm = value_type{0.5};
+    value_type const h = interval.duration();
     auto const R = so3::to_rotation_matrix(input.pose.q_WB);
     so3::UnitQuaternion<Linalg> increment;
     Status status = so3::exp(interval.omega * h, minimum_quaternion_norm, increment);
@@ -64,7 +64,7 @@ Status integrate_mean(ImuState<Linalg> const & input, ImuInterval<Linalg> const 
         return status;
     }
     candidate.pose.p_WB =
-        input.pose.p_WB + input.v_WB * h + R * integrals.A2 * interval.a + gravity * (h * h * Value{0.5});
+        input.pose.p_WB + input.v_WB * h + R * integrals.A2 * interval.a + gravity * (h * h * value_type{0.5});
     candidate.v_WB = input.v_WB + R * integrals.A1 * interval.a + gravity * h;
     if (!linalg::all_finite(candidate.pose.p_WB) || !linalg::all_finite(candidate.v_WB))
     {
@@ -120,7 +120,7 @@ template <typename Linalg>
 }
 
 /** Explicit scratch ownership. Contents are unspecified after a failed operation.
- * The state passed to predict must not alias candidate.
+ * Scratch must be disjoint from state and all inputs passed to predict.
  */
 template <typename Linalg, std::size_t MaxClones> struct PredictionWorkspace
 {
@@ -138,33 +138,33 @@ template <typename Linalg>
 Status translation_sensitivities(ImuInterval<Linalg> const & interval, linalg::Matrix<Linalg, 3U, 3U> & B1,
                                  linalg::Matrix<Linalg, 3U, 3U> & B2)
 {
-    using Value = typename Linalg::value_type;
-    using Matrix = linalg::Matrix<Linalg, 3U, 3U>;
+    using value_type = typename Linalg::value_type;
+    using matrix_type = linalg::Matrix<Linalg, 3U, 3U>;
     // Fixed five-point Gauss-Legendre rule; targets the integrals in M-PROPAGATE.
     constexpr std::array<double, 5> nodes{-0.9061798459386640, -0.5384693101056831, 0, 0.5384693101056831,
                                           0.9061798459386640};
     constexpr std::array<double, 5> weights{0.2369268850561891, 0.4786286704993665, 0.5688888888888889,
                                             0.4786286704993665, 0.2369268850561891};
-    Value const h = interval.duration();
-    B1 = Matrix{};
-    B2 = Matrix{};
+    value_type const h = interval.duration();
+    B1 = matrix_type{};
+    B2 = matrix_type{};
     for (std::size_t i = 0; i < nodes.size(); ++i)
     {
-        Value const time = h * (Value{1} + static_cast<Value>(nodes[i])) * Value{0.5};
-        Value const weight = h * static_cast<Value>(weights[i]) * Value{0.5};
+        value_type const time = h * (value_type{1} + static_cast<value_type>(nodes[i])) * value_type{0.5};
+        value_type const weight = h * static_cast<value_type>(weights[i]) * value_type{0.5};
         so3::UnitQuaternion<Linalg> q;
-        Status status = so3::exp(interval.omega * time, Value{0.5}, q);
+        Status status = so3::exp(interval.omega * time, value_type{0.5}, q);
         if (!succeeded(status))
         {
             return status;
         }
-        Matrix Jr;
+        matrix_type Jr;
         status = so3::right_jacobian(interval.omega * time, Jr);
         if (!succeeded(status))
         {
             return status;
         }
-        Matrix const value = (so3::to_rotation_matrix(q) * so3::hat(interval.a) * Jr) * (time * weight);
+        matrix_type const value = (so3::to_rotation_matrix(q) * so3::hat(interval.a) * Jr) * (time * weight);
         B1 = B1 + value;
         B2 = B2 + value * (h - time);
     }
@@ -183,9 +183,9 @@ template <typename Linalg, std::size_t MaxClones>
                              Tolerances<typename Linalg::value_type> const & tolerance,
                              PredictionWorkspace<Linalg, MaxClones> & work)
 {
-    using Value = typename Linalg::value_type;
-    using Matrix3 = linalg::Matrix<Linalg, 3U, 3U>;
-    using Matrix15 = linalg::Matrix<Linalg, 15U, 15U>;
+    using value_type = typename Linalg::value_type;
+    using matrix3_type = linalg::Matrix<Linalg, 3U, 3U>;
+    using matrix15_type = linalg::Matrix<Linalg, 15U, 15U>;
     if (&state == &work.candidate)
     {
         return Status::domain_error;
@@ -216,7 +216,7 @@ template <typename Linalg, std::size_t MaxClones>
     }
     mirror_upper(density);
     linalg::Matrix<Linalg, 12U, 12U> rates;
-    Value const h = interval.duration();
+    value_type const h = interval.duration();
     for (std::size_t i = 0; i < 12; ++i)
     {
         for (std::size_t j = 0; j < 12; ++j)
@@ -243,26 +243,26 @@ template <typename Linalg, std::size_t MaxClones>
     }
     work.candidate.time_ns = interval.end_ns;
     work.candidate.first = {work.candidate.imu.pose, work.candidate.imu.v_WB};
-    Matrix3 B1, B2;
+    matrix3_type B1, B2;
     status = detail::translation_sensitivities(interval, B1, B2);
     if (!succeeded(status))
     {
         return status;
     }
-    Matrix3 const R0 = so3::to_rotation_matrix(state.first.pose.q_WB);
-    Matrix3 const Rnext = so3::to_rotation_matrix(work.candidate.first.pose.q_WB);
-    Matrix3 const D = linalg::transpose(Rnext) * R0;
-    auto const dp =
-        work.candidate.first.pose.p_WB - state.first.pose.p_WB - state.first.v_WB * h - gravity * (h * h * Value{0.5});
+    matrix3_type const R0 = so3::to_rotation_matrix(state.first.pose.q_WB);
+    matrix3_type const Rnext = so3::to_rotation_matrix(work.candidate.first.pose.q_WB);
+    matrix3_type const D = linalg::transpose(Rnext) * R0;
+    auto const dp = work.candidate.first.pose.p_WB - state.first.pose.p_WB - state.first.v_WB * h -
+                    gravity * (h * h * value_type{0.5});
     auto const dv = work.candidate.first.v_WB - state.first.v_WB - gravity * h;
-    Matrix3 Jr;
+    matrix3_type Jr;
     status = so3::right_jacobian(-interval.omega * h, Jr);
     if (!succeeded(status))
     {
         return status;
     }
-    work.Psi = Matrix15::identity();
-    work.Psi.template set_block<0, 3>(Matrix3::identity() * h);
+    work.Psi = matrix15_type::identity();
+    work.Psi.template set_block<0, 3>(matrix3_type::identity() * h);
     work.Psi.template set_block<0, 6>(-so3::hat(dp) * R0);
     work.Psi.template set_block<3, 6>(-so3::hat(dv) * R0);
     work.Psi.template set_block<6, 6>(D);
@@ -292,7 +292,7 @@ template <typename Linalg, std::size_t MaxClones>
     {
         for (std::size_t j = 0; j < dimension; ++j)
         {
-            Value sum = 0;
+            value_type sum = 0;
             for (std::size_t k = 0; k < 15; ++k)
             {
                 sum += work.Psi(i, k) * work.candidate.P(k, j);
@@ -304,7 +304,7 @@ template <typename Linalg, std::size_t MaxClones>
     {
         for (std::size_t j = 0; j < 15; ++j)
         {
-            Value sum = noise(i, j);
+            value_type sum = noise(i, j);
             for (std::size_t k = 0; k < 15; ++k)
             {
                 sum += work.cross(i, k) * work.Psi(j, k);

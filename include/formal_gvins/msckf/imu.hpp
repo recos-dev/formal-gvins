@@ -38,7 +38,7 @@ template <typename Linalg> struct ImuInterval
 
 template <typename Linalg> [[nodiscard]] Status validate_interval(ImuInterval<Linalg> const & input)
 {
-    using Value = typename Linalg::value_type;
+    using value_type = typename Linalg::value_type;
     if (input.end_ns <= input.start_ns || input.end_ns - input.start_ns > maximum_interval_ns)
     {
         return Status::out_of_range;
@@ -47,7 +47,8 @@ template <typename Linalg> [[nodiscard]] Status validate_interval(ImuInterval<Li
     {
         return Status::non_finite_input;
     }
-    if (!(linalg::squared_norm(input.a) <= Value{10000}) || !(linalg::squared_norm(input.omega) <= Value{100}))
+    if (!(linalg::squared_norm(input.a) <= value_type{10000}) ||
+        !(linalg::squared_norm(input.omega) <= value_type{100}))
     {
         return Status::domain_error;
     }
@@ -62,7 +63,7 @@ template <typename Linalg>
 [[nodiscard]] Status interpolate(ImuSample<Linalg> const & left, ImuSample<Linalg> const & right, std::uint64_t time_ns,
                                  ImuSample<Linalg> & output)
 {
-    using Value = typename Linalg::value_type;
+    using value_type = typename Linalg::value_type;
     if (right.time_ns <= left.time_ns || right.time_ns - left.time_ns > maximum_interval_ns || time_ns < left.time_ns ||
         time_ns > right.time_ns)
     {
@@ -83,12 +84,12 @@ template <typename Linalg>
         output = right;
         return Status::success;
     }
-    Value const fraction =
-        static_cast<Value>(time_ns - left.time_ns) / static_cast<Value>(right.time_ns - left.time_ns);
+    value_type const fraction =
+        static_cast<value_type>(time_ns - left.time_ns) / static_cast<value_type>(right.time_ns - left.time_ns);
     ImuSample<Linalg> candidate;
     candidate.time_ns = time_ns;
-    candidate.specific_force = left.specific_force * (Value{1} - fraction) + right.specific_force * fraction;
-    candidate.angular_rate = left.angular_rate * (Value{1} - fraction) + right.angular_rate * fraction;
+    candidate.specific_force = left.specific_force * (value_type{1} - fraction) + right.specific_force * fraction;
+    candidate.angular_rate = left.angular_rate * (value_type{1} - fraction) + right.angular_rate * fraction;
     if (!linalg::all_finite(candidate.specific_force) || !linalg::all_finite(candidate.angular_rate))
     {
         return Status::non_finite_result;
@@ -106,7 +107,7 @@ template <typename Linalg>
                                       linalg::Vector<Linalg, 3U> const & b_a, linalg::Vector<Linalg, 3U> const & b_g,
                                       ImuInterval<Linalg> & output)
 {
-    using Value = typename Linalg::value_type;
+    using value_type = typename Linalg::value_type;
     if (right.time_ns <= left.time_ns || right.time_ns - left.time_ns > maximum_interval_ns)
     {
         return Status::out_of_range;
@@ -120,12 +121,12 @@ template <typename Linalg>
     ImuInterval<Linalg> candidate;
     candidate.start_ns = left.time_ns;
     candidate.end_ns = right.time_ns;
-    candidate.a = left.specific_force * Value{0.5} + right.specific_force * Value{0.5} - b_a;
-    candidate.omega = left.angular_rate * Value{0.5} + right.angular_rate * Value{0.5} - b_g;
+    candidate.a = left.specific_force * value_type{0.5} + right.specific_force * value_type{0.5} - b_a;
+    candidate.omega = left.angular_rate * value_type{0.5} + right.angular_rate * value_type{0.5} - b_g;
     Status const status = validate_interval(candidate);
     if (!succeeded(status))
     {
-        return status;
+        return status == Status::non_finite_input ? Status::non_finite_result : status;
     }
     output = candidate;
     return Status::success;

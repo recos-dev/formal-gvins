@@ -6,15 +6,14 @@ verification. Existing frontend decisions are recorded in the
 
 ## MSCKF mathematics implementation sequence
 
-**Status:** The formulation, reference comparison and local profile are committed
-as Draft at `b568004`. The action sequence below is proposed for stepwise review
-and implementation; it does not approve those requirements or authorize commits.
-The current repository has numerical primitives, an ORB frontend, EuRoC input and
-feature benchmarks. It does not yet implement the joint MSCKF estimator.
+**Status:** The scoped mathematical APIs and independent/native tests are
+implemented; the [verification inventory](analysis/msckf-verification.md) records
+what they check and remaining obligations. The formulation and requirements remain
+Draft. There is no complete visual estimator, initializer or runtime integration.
 
 The current scope is formula verification and the C++ mathematical filter:
-bounded state/covariance storage, propagation, cloning, camera/feature geometry,
-camera residual/Jacobian evaluation and generic correction. Use Eigen/double, fixed calibration and the
+bounded state/covariance storage, propagation, cloning, camera residual/Jacobian evaluation
+and generic correction. Use Eigen/double, fixed calibration and the
 selected Hamilton/FEJ formulation. Callers supply valid initial states, covered IMU
 intervals and observations associated with the requested clones. Synthetic tests
 exercise those numerical operations directly.
@@ -35,7 +34,7 @@ the revised conventional FEJ/identity-reset binding still require review.
 
 ### Current scope: commit-sized mathematical actions
 
-Each numbered row is one planned implementation/review unit, normally one commit
+Each numbered row identifies one implementation/review unit, normally one commit
 including its focused tests and requirement mapping. Existing VINS IDs retain their
 meaning; suffixes split a broad item without renumbering requirement IDs. Execute
 in the displayed order. A newly discovered prerequisite is reported against its
@@ -56,16 +55,17 @@ state/layout work. Formula verification continues with each numerical module.
 | 5 / VINS-04.3 | FEJ covariance propagation / M-PROPAGATE, M-FEJ. | Implement B1/B2, full Psi and Gd*(Qc/h)*Gd^T with the selected frozen references. Verify ordinary derivatives separately from FEJ, all bias/noise blocks, density/time scaling, source-order translation and IMU/clone cross-covariances. Test segment recurrence without requiring unsplit-Qd equality; publish mean/covariance/time/FEJ together. |
 | 6 / VINS-09 | Joint correction, injection and reset / M-CORRECT. | Use an SPD solve and Joseph covariance update; inject all IMU/clone means with Hamilton Exp and apply the selected identity reset. Verify cross-blocks, unchanged first estimates, correction limits and failure atomicity. Compare exact Joseph identities and physical-reset discrepancy separately; do not import the formal-eskf reset behavior. Compose production propagation, cloning and correction in synthetic numerical tests using supplied states and observations, without adding an event loop. |
 | 7 / VINS-05 | Clone augmentation and removal / M-CLONE. | Implement deterministic pose duplication and retained-coordinate selection, including nominal/FEJ identities and full cross-covariance. Test middle-clone removal, capacity boundaries and valid singular PSD covariance. The low-level removal contract requires the caller to discharge pending-observation ownership. |
-| 8 / VINS-07.1 | Camera model and visual Jacobians / M-VISUAL, M-FEJ. | Implement radial-tangential raw-pixel projection, bounded pointwise inverse, extrinsics/lever arm and current/frozen factors. Fix the inverse domain, iteration cap and residual limits before accepting it. Compare derivatives with an independent reference, and test round trips, off-axis/zero-distortion/invalid-depth cases and both reference FEJ distortion policies without silently changing the selected one. |
+| 8 / VINS-07.1 | Camera model and visual Jacobians / M-VISUAL, M-FEJ. | Implement radial-tangential raw-pixel projection, extrinsics/lever arm, residual and current/frozen Jacobians. Compare derivatives independently; test off-axis, zero distortion, invalid depth, camera domains and the selected fully frozen policy. Pointwise inversion belongs to the deferred triangulation path. |
 
 Measurement QR compression is an optional efficiency step, deferred from this
 mathematical scope. Triangulation and feature-error nullspace projection are also deferred.
 Using QR for nullspace projection remains distinct from measurement compression. VINS-09 accepts
 bounded residual/Jacobian/noise inputs without requiring measurement compression.
-The existing Draft profile budgets compressed batches. Before implementing an
-uncompressed correction, VINS-02/09 must bind its measurement-row capacity and
-workspace explicitly; the compressed workspace bound cannot be reused or the
-profile silently changed.
+The existing Draft profile budgets compressed batches.
+`CorrectionWorkspace<Linalg, MaxClones, MaxRows>` explicitly binds the uncompressed
+measurement capacity. Native correction checks exercise up to seven
+rows and peak clone capacity separately; the benchmark uses three rows. This does
+not qualify the deferred full visual batch or its compressed workspace budget.
 
 ### State capacity and C++ boundaries
 
@@ -132,7 +132,7 @@ focused equation and numerical composition checks in the mathematical actions.
 
 | Action | Deliverable / requirement owner | Later acceptance boundary |
 |---|---|---|
-| VINS-07.2 | Triangulation and point refinement / M-VISUAL. | Use normalized bearings for rank-aware initialization and the selected weighted raw-pixel XYZ refinement. Check known 3D scenes, pure rotation, low parallax, conditioning, behind-camera points and bounded nonconvergence; accept no invented landmark prior. Temporary feature storage remains outside the filter state. |
+| VINS-07.2 | Triangulation and point refinement / M-VISUAL. | Implement the bounded pointwise camera inverse with qualified domain/iteration/residual limits, then use normalized bearings for rank-aware initialization and the selected weighted raw-pixel XYZ refinement. Check known 3D scenes, pure rotation, low parallax, conditioning, behind-camera points and bounded nonconvergence; accept no invented landmark prior. Temporary feature storage remains outside the filter state. |
 | VINS-08.1 | Per-feature visual constraint and gate / M-CONSTRAINT. | Assemble matching residual/Hx/Hf rows, whiten together, eliminate the feature and gate with the actual retained dimension. Verify annihilation, whitened covariance and least-squares equivalence; exercise correlated noise, rank failure, gate equality and solver failure. |
 | VINS-08.2 | Bounded batch accumulation and QR compression / M-CONSTRAINT. | Gate features before incremental compression; retain state-column identity and all informative rows. Verify H^T*H and H^T*r invariance, empty/full batches and overflow behavior. Measure the profile's bounded scratch use; do not allocate the full uncompressed innovation system. |
 | VINS-06 | Feature-history ownership / V-TRACK, M-LIFECYCLE. | Bind observations to stable clone/image/camera IDs and retain once-only consumption/retirement records. Test lost/continuing tracks, reused slots, pending clone retirement, history/batch capacity and failed/retried updates. Frontend descriptor ownership stays separate. |
@@ -266,7 +266,10 @@ not add an attitude/rate controller.
 scoring, per-frame timings/reports and unit/integration tests are implemented for
 CPU and CUDA, with local RTX 3060 execution checked.
 Per-stage profiling, qualified CPU/CUDA comparison and reviewed baselines remain
-pending. See the [runnable benchmark](guides/frontend.md#fixed-dataset-orb-benchmark).
+pending. See the [runnable frontend benchmark](guides/frontend.md#fixed-dataset-orb-benchmark).
+The [mathematical benchmark](guides/msckf-math.md#tests-and-benchmark) measures
+nominal/joint prediction, correction, cloning and camera observation with simple
+analytical residuals; trajectory accuracy and approved timing baselines remain pending.
 
 Build independently runnable benchmarks for each implemented module, reporting
 execution time together with an appropriate correctness or accuracy metric.
@@ -282,7 +285,7 @@ adapters for new methods reuse the protocol rather than adding separate scorers.
 | Linalg and SO(3) operations | Reference error, solve residuals, orthogonality and rotation error; identify precision and active dimensions. |
 | Image preprocessing and ORB extraction | Coordinate RMSE and repeatability with known image transformations/correspondences; report feature count and spatial coverage. |
 | Descriptor matching, geometric rejection and track management | Match precision/recall with labelled correspondences, reprojection error where defined, track survival and identity violations. Descriptor distances and inlier counts are not ground-truth accuracy. |
-| Future MSCKF propagation and update modules | Position/velocity RMSE and geodesic attitude error against an identified reference. Full-trajectory ATE/RPE belongs to the additional integration benchmark. |
+| MSCKF propagation and update modules | Position/velocity RMSE and geodesic attitude error against an identified reference. Full-trajectory ATE/RPE belongs to the additional integration benchmark. |
 
 Completion criteria:
 

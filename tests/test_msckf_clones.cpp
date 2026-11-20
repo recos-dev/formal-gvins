@@ -96,6 +96,13 @@ int main()
     msckf::State<L, 0> no_clones, no_scratch;
     t.expect(msckf::augment_clone(no_clones, 1, tol, no_scratch) == Status::out_of_range, "clones",
              "zero capacity configuration");
+    msckf::State<L, 1> large, large_scratch;
+    large.P(0, 0) = 1e308;
+    auto const large_before = large;
+    t.expect(succeeded(msckf::validate(large, tol)), "clones", "large finite PSD prior is admitted");
+    t.expect(msckf::augment_clone(large, 1, tol, large_scratch) == Status::non_finite_result &&
+                 test::equal_state(large, large_before),
+             "clones", "augmented covariance norm overflow preserves state");
     // Repeated mathematical composition; scheduling/feature ownership remain external.
     msckf::PredictionWorkspace<L, 11> prediction;
     msckf::CorrectionWorkspace<L, 11, 1> correction;

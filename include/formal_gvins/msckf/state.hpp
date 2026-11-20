@@ -80,10 +80,11 @@ template <typename Linalg, std::size_t MaxClones> struct State
     static constexpr std::size_t clone_offset(std::size_t index) { return 15U + 6U * index; }
 };
 
-template <typename Linalg> bool valid_tolerances(Tolerances<typename Linalg::value_type> const & tolerance)
+template <typename Linalg>
+[[nodiscard]] bool valid_tolerances(Tolerances<typename Linalg::value_type> const & tolerance)
 {
-    using Math = typename Linalg::scalar_math_type;
-    return Math::is_finite(tolerance.quaternion_squared_norm) && Math::is_finite(tolerance.symmetry) &&
+    using math_type = typename Linalg::scalar_math_type;
+    return math_type::is_finite(tolerance.quaternion_squared_norm) && math_type::is_finite(tolerance.symmetry) &&
            tolerance.quaternion_squared_norm >= 0 && tolerance.quaternion_squared_norm < 1 && tolerance.symmetry >= 0 &&
            tolerance.symmetry < 1;
 }
@@ -91,18 +92,18 @@ template <typename Linalg> bool valid_tolerances(Tolerances<typename Linalg::val
 template <typename Linalg>
 [[nodiscard]] Status validate_pose(Pose<Linalg> const & pose, typename Linalg::value_type norm_tolerance)
 {
-    using Math = typename Linalg::scalar_math_type;
+    using math_type = typename Linalg::scalar_math_type;
     auto const q = pose.q_WB.coefficients();
     if (!linalg::all_finite(pose.p_WB) || !linalg::all_finite(q))
     {
         return Status::non_finite_input;
     }
-    if (!Math::is_finite(norm_tolerance) || norm_tolerance < 0 || norm_tolerance >= 1)
+    if (!math_type::is_finite(norm_tolerance) || norm_tolerance < 0 || norm_tolerance >= 1)
     {
         return Status::domain_error;
     }
     auto const residual = linalg::squared_norm(q) - typename Linalg::value_type{1};
-    if (!Math::is_finite(residual) || scalar::absolute<Math>(residual) > norm_tolerance)
+    if (!math_type::is_finite(residual) || scalar::absolute<math_type>(residual) > norm_tolerance)
     {
         return Status::invalid_quaternion_norm;
     }
@@ -114,13 +115,13 @@ template <typename Linalg, std::size_t Size>
 [[nodiscard]] Status validate_covariance(linalg::BoundedMatrix<Linalg, Size, Size> const & matrix,
                                          typename Linalg::value_type tolerance)
 {
-    using Value = typename Linalg::value_type;
-    using Math = typename Linalg::scalar_math_type;
+    using value_type = typename Linalg::value_type;
+    using math_type = typename Linalg::scalar_math_type;
     if (matrix.rows() == 0 || matrix.rows() != matrix.columns())
     {
         return Status::out_of_range;
     }
-    if (!Math::is_finite(tolerance) || tolerance < 0 || tolerance >= 1)
+    if (!math_type::is_finite(tolerance) || tolerance < 0 || tolerance >= 1)
     {
         return Status::domain_error;
     }
@@ -128,18 +129,18 @@ template <typename Linalg, std::size_t Size>
     {
         return Status::non_finite_input;
     }
-    Value norm = 0;
-    Value asymmetry = 0;
+    value_type norm = 0;
+    value_type asymmetry = 0;
     for (std::size_t row = 0; row < matrix.rows(); ++row)
     {
-        Value row_norm = 0;
-        Value row_asymmetry = 0;
+        value_type row_norm = 0;
+        value_type row_asymmetry = 0;
         for (std::size_t column = 0; column < matrix.columns(); ++column)
         {
-            row_norm += scalar::absolute<Math>(matrix(row, column));
-            row_asymmetry += scalar::absolute<Math>(matrix(row, column) - matrix(column, row));
+            row_norm += scalar::absolute<math_type>(matrix(row, column));
+            row_asymmetry += scalar::absolute<math_type>(matrix(row, column) - matrix(column, row));
         }
-        if (!Math::is_finite(row_norm) || !Math::is_finite(row_asymmetry))
+        if (!math_type::is_finite(row_norm) || !math_type::is_finite(row_asymmetry))
         {
             return Status::non_finite_result;
         }
@@ -152,7 +153,7 @@ template <typename Linalg, std::size_t Size>
             asymmetry = row_asymmetry;
         }
     }
-    if (asymmetry > tolerance * (norm > 1 ? norm : Value{1}))
+    if (asymmetry > tolerance * (norm > 1 ? norm : value_type{1}))
     {
         return Status::domain_error;
     }

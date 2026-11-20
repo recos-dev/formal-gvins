@@ -27,7 +27,7 @@ template <typename Linalg, std::size_t MaxClones>
     {
         return Status::domain_error;
     }
-    Status const status = validate(state, tolerance);
+    Status status = validate(state, tolerance);
     if (!succeeded(status))
     {
         return status;
@@ -66,6 +66,12 @@ template <typename Linalg, std::size_t MaxClones>
             candidate.P(j, i) = value;
         }
     }
+    // Duplication increases row sums even though it only copies coefficients.
+    status = validate_covariance(candidate.P, tolerance.symmetry);
+    if (!succeeded(status))
+    {
+        return status;
+    }
     state = candidate;
     return Status::success;
 }
@@ -83,7 +89,7 @@ template <typename Linalg, std::size_t MaxClones>
     {
         return Status::domain_error;
     }
-    Status const status = validate(state, tolerance);
+    Status status = validate(state, tolerance);
     if (!succeeded(status))
     {
         return status;
@@ -111,6 +117,11 @@ template <typename Linalg, std::size_t MaxClones>
             candidate.P(i, j) = value;
             candidate.P(j, i) = value;
         }
+    }
+    status = validate_covariance(candidate.P, tolerance.symmetry);
+    if (!succeeded(status))
+    {
+        return status;
     }
     state = candidate;
     return Status::success;
