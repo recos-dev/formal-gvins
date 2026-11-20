@@ -20,12 +20,12 @@ checks, not exhaustive proofs or a Lean-to-C++ refinement.
 | Requirement / obligation | Independent check | Remaining proof or acceptance |
 |---|---|---|
 | M-PROPAGATE: held-input integrals and zero-rate limits | `test_integrals_high_precision_and_limits`; augmented matrix exponential and 60-digit comparison | Uniform truncation/rounding bounds, supported precision/target profiles |
-| M-PROPAGATE: full physical derivative | `test_physical_derivative_and_fej_gauge`; rotating-frame ODE exponential and finite differences | Exact derivative proof; production correspondence |
+| M-PROPAGATE: full physical derivative | `test_physical_derivative_and_fej_gauge`; rotating-frame ODE exponential and finite differences | Exact derivative proof; uniform floating-point bounds |
 | M-FEJ: frozen transition | Same test; four-column gauge transport with different current/first estimates | Exact gauge and source-convention correspondence; repeated-update statistical qualification |
-| M-PROPAGATE: interval-equivalent noise | `test_noise_scaling_and_segment_recurrence`; h^3/4 position variance, 5h^3/16 split example and bias-only scaling | Congruence PSD proof; correlated-driver C++ tests; segmentation-model qualification |
-| M-CLONE: augmentation/selection | `test_clone_selection_joseph_and_identity_reset`; full covariance congruence | Layout, selection and failure-preservation C++ checks; exact PSD proof |
-| M-CORRECT: Joseph and reset | Same test; Joseph/conditional-covariance identity and physical Jr derivative | C++ correspondence, failure/alias/domain checks; exact identities and accumulated consistency |
-| M-VISUAL: projection and current/frozen derivatives | Pending independent derivative and gauge checks with camera implementation | No triangulation, nullspace or image-pipeline claim in this scope |
+| M-PROPAGATE: interval-equivalent noise | `test_noise_scaling_and_segment_recurrence`; h^3/4 position variance, 5h^3/16 split example and bias-only scaling | Congruence PSD proof; uniform numerical bounds and segmentation-model qualification |
+| M-CLONE: augmentation/selection | `test_clone_selection_joseph_and_identity_reset`; full covariance congruence | Exact selection/PSD proofs; lifecycle integration |
+| M-CORRECT: Joseph and reset | Same test; Joseph/conditional-covariance identity and physical Jr derivative | Exact identities, uniform numerical bounds and accumulated consistency |
+| M-VISUAL: projection and current/frozen derivatives | `msckf_cpp_reference` central differences and gauge checks; native camera tests | Exact derivatives and uniform numerical bounds; no triangulation, nullspace or image-pipeline claim in this scope |
 
 C++ tests must call the actual production operations. Reference inputs must cover
 N=0 and populated clone states, off-diagonal correlations, nonidentity attitudes,
@@ -93,3 +93,15 @@ identities/times, roundoff canonicalization and failure preservation. A syntheti
 sequence composes prediction, supplied-position correction, cloning and removal.
 The caller still owns observation retirement and session-wide identity; this is
 not an implemented feature lifecycle or a visual-observability experiment.
+
+## Camera observation
+
+`project` and `camera_observation` implement radtan raw-pixel prediction and the
+fully frozen visual derivatives. The oracle differentiates an independent forward
+model under right perturbations, including nonidentity extrinsics/lever arms and
+nonzero distortion, and checks the four-column geometric gauge cancellation.
+Native tests separate current residual from frozen Jacobians and check depth,
+calibration, radius/finiteness and failure preservation. Reference bounds are
+1e-10 pixels for residuals and 2e-7 absolute / 2e-8 relative for central-difference
+Jacobians (step 1e-6), with 1e-10 gauge residual. Pointwise inverse, triangulation
+and nullspace construction remain deferred; this is not a complete visual update.

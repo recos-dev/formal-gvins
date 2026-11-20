@@ -2,6 +2,7 @@
 #include <formal_gvins/linalg/backend/eigen.hpp>
 #include <formal_gvins/msckf/prediction.hpp>
 #include <formal_gvins/msckf/correction.hpp>
+#include <formal_gvins/msckf/camera.hpp>
 #include <string_view>
 #include <iomanip>
 #include <iostream>
@@ -117,6 +118,46 @@ int correction_probe()
     return 0;
 }
 
+int camera_probe()
+{
+    using namespace formal_gvins;
+    msckf::Pose<L> current, first;
+    Vector angle, first_angle, extrinsic_angle, lever, feature;
+    read(angle);
+    read(current.p_WB);
+    read(first_angle);
+    read(first.p_WB);
+    read(extrinsic_angle);
+    read(lever);
+    read(feature);
+    so3::UnitQuaternion<L> q_BC;
+    if (!succeeded(so3::exp(angle, .5, current.q_WB)) || !succeeded(so3::exp(first_angle, .5, first.q_WB)) ||
+        !succeeded(so3::exp(extrinsic_angle, .5, q_BC)))
+    {
+        return 2;
+    }
+    msckf::Radtan<double> camera;
+    std::cin >> camera.fx >> camera.fy >> camera.cx >> camera.cy >> camera.k1 >> camera.k2 >> camera.p1 >> camera.p2;
+    linalg::Vector<L, 2> measurement;
+    std::cin >> measurement(0) >> measurement(1);
+    if (!std::cin)
+    {
+        return 3;
+    }
+    msckf::CameraObservation<L> observation;
+    if (!succeeded(msckf::camera_observation(current, first, feature, q_BC, lever, measurement, camera,
+                                             msckf::CameraDomain<double>{.1, 60, 1.5},
+                                             msckf::Tolerances<double>{1e-12, 1e-12}, observation)))
+    {
+        return 4;
+    }
+    print(observation.residual);
+    print(observation.H_pose);
+    print(observation.H_feature);
+    std::cout << '\n';
+    return 0;
+}
+
 int main(int argc, char ** argv)
 {
     using namespace formal_gvins;
@@ -125,6 +166,10 @@ int main(int argc, char ** argv)
     if (argc > 1 && std::string_view(argv[1]) == "correct")
     {
         return correction_probe();
+    }
+    if (argc > 1 && std::string_view(argv[1]) == "camera")
+    {
+        return camera_probe();
     }
     msckf::ImuState<L> state;
     msckf::ImuInterval<L> interval;
