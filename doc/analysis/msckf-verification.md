@@ -35,3 +35,11 @@ Keep native memory checks, mathematical identities and statistical evidence dist
 
 The benchmark protocol in B-01 applies to each callable mathematical module.
 Execution logs, timings and stack reports belong in ignored output, not this file.
+
+## State admission
+
+`msckf::State`, `validate` and `assign` implement bounded layout and numerical
+admission (`M-STATE`), with tests in `tests/test_msckf_state.cpp`. N=0 and capacity
+11 are exercised with allocation disabled. Tests cover active dimensions, duplicate
+IDs/times, inactive slots, asymmetry, non-finite inputs and failed assignment.
+They do not prove the PSD or physical suitability of a caller-supplied prior.
