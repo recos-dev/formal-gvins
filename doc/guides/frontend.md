@@ -137,7 +137,8 @@ a frontend demo, not an MSCKF.
 `frames.csv` separates image read time from complete frontend time. The
 summary excludes the first 10 frames for warmup; visualization and CSV writes are
 outside that latency. `observations.csv` records image/time/track identities and
-raw pixels; `profile.txt` binds configuration, calibration and OpenCV build.
+raw pixels, normalized rays and per-camera observation ages. `events.csv` records
+started/continued/ended IDs; `profile.txt` binds configuration, calibration and OpenCV build.
 Session/calibration/noise IDs are local to that run. Resampling changes image noise;
 binding 1 is an unqualified development model, not a covariance ready for fusion.
 
@@ -432,3 +433,35 @@ atomicity and a retry against a control tracker. This adds no production callbac
 or mock tracker and does not claim to emulate device loss. Other host tests cover
 backwards/duplicate time, image size and binding changes, reset, featureless
 images, unavailable backends and caller mutation of returned data.
+
+### Instrumented regression reports
+
+The v4 benchmark pins localization, inverse-camera and geometric-screen settings
+as well as ORB/selection options. Reports include candidate rejection counts,
+grid occupancy, completed track-length distributions and still-active lengths
+reported separately as right-censored observations. A missing/failed temporal
+frame makes lifetime statistics unavailable; it is not silently omitted.
+
+Optional frontend diagnostics measure detection, localization, description,
+unprojection, matching, geometry, selection and publication preparation. Calls
+without diagnostics perform no clock or OS memory queries. Stage timings include
+blocking GPU work and transfers in their owning stages. Image I/O, visualization
+and report writes are outside frontend time. Per-stage RSS is the Linux process
+high-water mark observed at stage exit, including warmup and library allocations;
+it is neither stage-owned allocation nor GPU VRAM. Zero/unavailable measurements
+are rendered as N/A. Instrumentation can affect latency; these are host observations,
+not worst-case execution or Orin qualification.
+
+To compare with an earlier complete report, use a new output directory:
+
+```bash
+python3 scripts/run_benchmark.py features --backend both \
+    --baseline output/prior-run/summary.json --output output/new-run
+```
+
+The runner requires matching dataset hashes, profile, scoring tools, machine and
+native build configuration before reporting deltas. Code/executable revisions may
+change. It does not invent regression limits or approve a baseline automatically.
+Translation tests have an independently known pixel correspondence, not ground
+truth for general 3D motion. EuRoC temporal precision/recall and trajectory RMSE
+remain N/A; its pose truth does not identify each image feature.

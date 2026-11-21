@@ -8,6 +8,7 @@
 #pragma once
 
 #include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/metrics.hpp>
 #include <vector>
 #include <opencv2/core.hpp>
 #include <opencv2/features2d.hpp>
@@ -71,7 +72,8 @@ public:
     OrbExtractor & operator=(OrbExtractor const &) = delete;
 
     /** CV_8UC1 image, optional same-size CV_8UC1 mask. Failure preserves output. */
-    [[nodiscard]] VisionStatus extract(cv::Mat const & image, cv::Mat const & mask, OrbFeatures & output);
+    [[nodiscard]] VisionStatus extract(cv::Mat const & image, cv::Mat const & mask, OrbFeatures & output,
+                                       FrontendMetrics * metrics = nullptr);
 
     /** Two-nearest Hamming candidates. Fewer than two train rows yields no candidates. */
     [[nodiscard]] VisionStatus match(OrbFeatures const & query, OrbFeatures const & train,

@@ -7,6 +7,7 @@
 
 #include <formal_gvins/dataset/euroc.hpp>
 #include <formal_gvins/vision/orb_tracker.hpp>
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -72,7 +73,7 @@ Profile read_profile(char const * path, Execution execution)
     }
     auto const node = file.root();
     int const first = integer(node, "first_frame"), count = integer(node, "frame_count");
-    if (static_cast<std::string>(node["protocol"]) != "euroc-orb-v3" || integer(node, "camera") != 0 || first < 0 ||
+    if (static_cast<std::string>(node["protocol"]) != "euroc-orb-v4" || integer(node, "camera") != 0 || first < 0 ||
         count < 2 || first > std::numeric_limits<int>::max() - count)
     {
         throw std::runtime_error("Unsupported benchmark profile");
@@ -98,6 +99,20 @@ Profile read_profile(char const * path, Execution execution)
     options.epipolar_threshold = real(tracking, "epipolar_threshold");
     options.confidence = real(tracking, "confidence");
     options.ransac_iterations = integer(tracking, "ransac_iterations");
+    options.orb.localization.window_radius = integer(tracking, "localization_window_radius");
+    options.orb.localization.iterations = integer(tracking, "localization_iterations");
+    options.orb.localization.epsilon = real(tracking, "localization_epsilon");
+    options.orb.localization.maximum_displacement = real(tracking, "localization_maximum_displacement_px");
+    options.orb.localization.minimum_eigenvalue = real(tracking, "localization_minimum_eigenvalue");
+    options.orb.localization.maximum_condition = real(tracking, "localization_maximum_condition");
+    options.inverse.radius = real(tracking, "inverse_radius");
+    options.inverse.residual_px = real(tracking, "inverse_residual_px");
+    options.inverse.maximum_step = real(tracking, "inverse_maximum_step");
+    options.inverse.minimum_slope = real(tracking, "inverse_minimum_slope");
+    options.inverse.iterations = integer(tracking, "inverse_iterations");
+    options.minimum_epipolar_denominator = real(tracking, "epipolar_minimum_denominator");
+    options.rotation_iterations = integer(tracking, "rotation_iterations");
+    options.rotation_support_fraction = real(tracking, "rotation_support_fraction");
     return result;
 }
 
@@ -139,7 +154,17 @@ void write_options(cv::FileStorage & output, OrbTrackingOptions const & options)
            << "feature_capacity" << options.selection.capacity << "grid_columns" << options.selection.columns
            << "grid_rows" << options.selection.rows << "minimum_distance_px" << options.selection.minimum_distance
            << "ratio" << options.ratio << "epipolar_threshold" << options.epipolar_threshold << "confidence"
-           << options.confidence << "ransac_iterations" << options.ransac_iterations << "}";
+           << options.confidence << "ransac_iterations" << options.ransac_iterations << "localization_window_radius"
+           << options.orb.localization.window_radius << "localization_iterations" << options.orb.localization.iterations
+           << "localization_epsilon" << options.orb.localization.epsilon << "localization_maximum_displacement_px"
+           << options.orb.localization.maximum_displacement << "localization_minimum_eigenvalue"
+           << options.orb.localization.minimum_eigenvalue << "localization_maximum_condition"
+           << options.orb.localization.maximum_condition << "inverse_radius" << options.inverse.radius
+           << "inverse_residual_px" << options.inverse.residual_px << "inverse_maximum_step"
+           << options.inverse.maximum_step << "inverse_minimum_slope" << options.inverse.minimum_slope
+           << "inverse_iterations" << static_cast<int>(options.inverse.iterations) << "epipolar_minimum_denominator"
+           << options.minimum_epipolar_denominator << "rotation_iterations" << options.rotation_iterations
+           << "rotation_support_fraction" << options.rotation_support_fraction << "}";
     // These are fixed properties of the production adapter, not benchmark switches.
     output << "adapter"
            << "{"
@@ -185,6 +210,50 @@ void write_failure(cv::FileStorage & output, std::size_t index, std::uint64_t ti
            << "error" << error << "}";
 }
 
+void write_telemetry(cv::FileStorage & output, Frame const & frame,
+                     formal_gvins::vision::FrontendMetrics const & stages)
+{
+    auto const & d = frame.diagnostics;
+    auto const & l = d.features.localization;
+    output << "diagnostics"
+           << "{"
+           << "detected" << static_cast<int>(l.detected) << "support_rejected" << static_cast<int>(l.support_rejected)
+           << "displacement_rejected" << static_cast<int>(l.displacement_rejected) << "quality_rejected"
+           << static_cast<int>(l.quality_rejected) << "inverse_rejected" << static_cast<int>(d.inverse_rejected)
+           << "forward_ratio_passed" << static_cast<int>(d.matches.descriptors.forward_ratio_passed)
+           << "reverse_ratio_passed" << static_cast<int>(d.matches.descriptors.reverse_ratio_passed)
+           << "reciprocal_candidates" << static_cast<int>(d.reciprocal_candidates) << "geometric_candidates"
+           << static_cast<int>(d.geometric_candidates) << "quota_rejected"
+           << static_cast<int>(d.selection.quota_rejected) << "spacing_rejected"
+           << static_cast<int>(d.selection.spacing_rejected) << "invalid_rejected"
+           << static_cast<int>(d.selection.invalid_rejected) << "rotation_checked"
+           << static_cast<int>(d.matches.rotation_checked) << "}";
+    output << "stages"
+           << "{";
+    for (std::size_t i = 0; i < stages.size(); ++i)
+    {
+        output << formal_gvins::vision::frontend_stage_names[i] << "{"
+               << "executed" << static_cast<int>(stages[i].executed) << "ms" << stages[i].milliseconds
+               << "process_peak_kib" << std::to_string(stages[i].process_peak_kib) << "}";
+    }
+    output << "}"
+           << "ages"
+           << "[";
+    for (auto age : d.ages)
+    {
+        output << std::to_string(age);
+    }
+    output << "]"
+           << "events"
+           << "[";
+    constexpr char const * changes[] = {"started", "continued", "ended"};
+    for (auto const & event : frame.tracks.events)
+    {
+        output << "[:" << std::to_string(event.track_id) << changes[static_cast<std::size_t>(event.change)] << "]";
+    }
+    output << "]";
+}
+
 void write_temporal(cv::FileStorage & output, Frame const & tracked, double read_ms, double frontend_ms)
 {
     output << "{"
@@ -201,8 +270,9 @@ void write_temporal(cv::FileStorage & output, Frame const & tracked, double read
     {
         output << "[:" << observation.u << observation.v << std::to_string(observation.track_id) << "]";
     }
-    output << "]"
-           << "}";
+    output << "]";
+    write_telemetry(output, tracked, tracked.diagnostics.stages);
+    output << "}";
 }
 
 void write_points(cv::FileStorage & output, char const * name, Frame const & tracked, cv::Mat const & opposite_mask,
@@ -237,8 +307,17 @@ void write_translation(cv::FileStorage & output, std::size_t index, Frame const 
     {
         output << "[:" << match.queryIdx << match.trainIdx << "]";
     }
-    output << "]"
-           << "}";
+    output << "]";
+    auto stages = after.diagnostics.stages;
+    for (std::size_t i = 0; i < stages.size(); ++i)
+    {
+        stages[i].executed = stages[i].executed || before.diagnostics.stages[i].executed;
+        stages[i].milliseconds += before.diagnostics.stages[i].milliseconds;
+        stages[i].process_peak_kib =
+            std::max(stages[i].process_peak_kib, before.diagnostics.stages[i].process_peak_kib);
+    }
+    write_telemetry(output, after, stages);
+    output << "}";
 }
 
 int run_temporal(EurocSequence const & sequence, Profile const & profile, cv::FileStorage & output,
@@ -357,7 +436,7 @@ void run(char const * input, Profile profile, std::filesystem::path const & dire
         throw std::runtime_error("Cannot write OpenCV build identity");
     }
     output << "protocol"
-           << "euroc-orb-v3"
+           << "euroc-orb-v4"
            << "workload" << workload << "execution"
            << (profile.tracking.orb.execution == Execution::cpu ? "cpu" : "cuda") << "opencv" << CV_VERSION
            << "compiler" << BENCHMARK_COMPILER << "build_type" << BENCHMARK_BUILD_TYPE << "width"

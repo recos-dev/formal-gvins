@@ -65,6 +65,25 @@ class SuiteTests(unittest.TestCase):
         self.assertEqual(json.loads((self.args.output / "summary.json").read_text()), result)
         self.assertIn("| Metric | CPU | CUDA |", (self.args.output / "report.md").read_text())
 
+    def test_baseline_allows_code_changes_but_requires_identical_experiment(self):
+        old = {"schema": "feature-benchmark-suite-v2", "status": "complete",
+               "results": {"cpu": completed_backend("cpu")}}
+        current = copy.deepcopy(old)
+        current["results"]["cpu"]["identity"].update(git_head="new", executable_sha256="new")
+        current["results"]["cpu"]["results"]["temporal"]["frontend"]["median_ms"] = 5
+        result = suite.compare_baseline(current, old)
+        self.assertEqual(result["status"], "compared")
+        metric = next(row for row in result["deltas"] if row["metric"] == "cpu.temporal.frontend.median_ms")
+        self.assertEqual(metric["ratio"], 2)
+        self.assertEqual(metric["delta"], 2.5)
+        current["results"]["cpu"]["identity"]["cpu"] = "another machine"
+        self.assertEqual(suite.compare_baseline(current, old)["status"], "incompatible")
+        current = copy.deepcopy(old)
+        current["results"]["cpu"]["profile"]["frame_count"] = 99
+        self.assertEqual(suite.compare_baseline(current, old)["status"], "incompatible")
+        old["status"] = "failed"
+        self.assertEqual(suite.compare_baseline(current, old)["status"], "incompatible")
+
     def test_cpu_only_uses_cpu_build(self):
         self.args.backend = "cpu"
         with mock.patch.object(suite.features, "run", return_value=completed_backend("cpu")) as execute:

@@ -6,6 +6,7 @@
  */
 
 #include <formal_gvins/vision/orb_tracker.hpp>
+#include "timing.hpp"
 #include <formal_gvins/scalar/backend/standard.hpp>
 #include <algorithm>
 #include <cmath>
@@ -46,7 +47,9 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         return VisionStatus::invalid_input;
     }
     OrbFeatures detected;
-    VisionStatus status = m_extractor.extract(image, mask, detected);
+    OrbTrackingDiagnostics details;
+    VisionStatus status =
+        m_extractor.extract(image, mask, detected, diagnostics != nullptr ? &details.stages : nullptr);
     if (status != VisionStatus::success)
     {
         return status;
@@ -56,7 +59,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         TrackedImage candidate;
         candidate.identity = identity;
         candidate.pixel_domain = PixelDomain::raw;
-        OrbTrackingDiagnostics details;
+        StageTimer timer(diagnostics != nullptr ? &details.stages : nullptr, FrontendStage::unprojection);
         details.features.localization = detected.localization;
         for (std::size_t i = 0; i < detected.keypoints.size(); ++i)
         {
@@ -75,6 +78,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         details.ages.resize(candidate.observations.size(), 0);
         if (m_have_previous)
         {
+            timer.next(FrontendStage::matching);
             std::vector<std::vector<cv::DMatch>> neighbors;
             status = m_extractor.match(m_previous, details.features, neighbors);
             if (status != VisionStatus::success)
@@ -87,6 +91,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
             {
                 return status;
             }
+            timer.next(FrontendStage::geometry);
             status = verify_matches(m_previous, details.features, neighbors, reverse, m_options, details.matches);
             if (status != VisionStatus::success)
             {
@@ -104,6 +109,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
                 details.ages[train] = m_ages[query] + 1;
             }
         }
+        timer.next(FrontendStage::selection);
         details.reciprocal_candidates = details.matches.descriptors.matches.size();
         details.geometric_candidates = details.matches.inliers.size();
         std::vector<SelectionCandidate> priorities;
@@ -147,6 +153,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         candidate.observations = std::move(observations);
         details.features = std::move(selected);
         details.ages = std::move(ages);
+        timer.next(FrontendStage::publication);
         auto next_id = m_next_track_id;
         for (std::size_t index = 0; index < candidate.observations.size(); ++index)
         {
@@ -192,6 +199,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         }
         observations = candidate.observations;
         ages = details.ages;
+        timer.finish();
         m_previous = std::move(history);
         m_observations = std::move(observations);
         m_ages = std::move(ages);

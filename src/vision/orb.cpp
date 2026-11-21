@@ -6,6 +6,7 @@
  */
 
 #include <formal_gvins/vision/orb.hpp>
+#include "timing.hpp"
 #include <cmath>
 #include <utility>
 
@@ -53,7 +54,8 @@ OrbExtractor::OrbExtractor(OrbOptions const & options) : m_execution(options.exe
     }
 }
 
-VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, OrbFeatures & output)
+VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, OrbFeatures & output,
+                                   FrontendMetrics * metrics)
 {
     if (m_status != VisionStatus::success)
     {
@@ -67,6 +69,8 @@ VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, 
     try
     {
         OrbFeatures candidate;
+        FrontendMetrics measured{};
+        StageTimer timer(metrics != nullptr ? &measured : nullptr, FrontendStage::detection);
         if (m_execution == Execution::cpu)
         {
             m_cpu->detect(image, candidate.keypoints, mask);
@@ -85,12 +89,14 @@ VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, 
             m_gpu->convert(device_keypoints, candidate.keypoints);
         }
 #endif
+        timer.next(FrontendStage::localization);
         auto const status =
             localize_orb(image, mask, candidate.keypoints, m_options, candidate.keypoints, candidate.localization);
         if (status != VisionStatus::success)
         {
             return status;
         }
+        timer.next(FrontendStage::description);
         if (!candidate.keypoints.empty())
         {
             if (m_execution == Execution::cpu)
@@ -115,6 +121,11 @@ VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, 
         if (candidate.descriptors.rows != static_cast<int>(candidate.keypoints.size()))
         {
             return VisionStatus::backend_failure;
+        }
+        timer.finish();
+        if (metrics != nullptr)
+        {
+            *metrics = measured;
         }
         output = std::move(candidate);
         return VisionStatus::success;

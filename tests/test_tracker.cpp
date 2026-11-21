@@ -8,6 +8,7 @@
 #include <formal_gvins/vision/orb_tracker.hpp>
 #include "test_support.hpp"
 #include <algorithm>
+#include <cmath>
 #include <set>
 #include <opencv2/imgproc.hpp>
 
@@ -87,12 +88,25 @@ void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOp
     auto compare = [&](cv::Mat const & frame, VisionStatus expected)
     {
         auto const saved = output;
+        auto const saved_stages = diagnostics.stages;
         cv::setRNGSeed(71);
         auto const status = plain.process(identity, frame, {}, output);
         cv::setRNGSeed(71);
         auto const inspected_status = inspected.process(identity, frame, {}, reference, &diagnostics);
         test.expect(status == expected && inspected_status == expected, "interface", "matching operation status");
         test.expect(same_observations(output, reference), "interface", "diagnostics do not change observations or IDs");
+        for (std::size_t i = 0; i < diagnostics.stages.size(); ++i)
+        {
+            auto const & stage = diagnostics.stages[i];
+            test.expect(std::isfinite(stage.milliseconds) && stage.milliseconds >= 0, "metrics",
+                        "finite nonnegative stage timing");
+            if (status != VisionStatus::success)
+            {
+                test.expect(stage.milliseconds == saved_stages[i].milliseconds &&
+                                stage.process_peak_kib == saved_stages[i].process_peak_kib,
+                            "metrics", "failure preserves diagnostics timing");
+            }
+        }
         if (status != VisionStatus::success)
         {
             test.expect(same_observations(output, saved), "interface", "failure preserves the complete batch");

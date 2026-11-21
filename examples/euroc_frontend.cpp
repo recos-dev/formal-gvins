@@ -87,12 +87,21 @@ int main(int argc, char ** argv)
         std::ofstream metrics(output_directory / "frames.csv");
         std::ofstream observations(output_directory / "observations.csv");
         std::ofstream profile(output_directory / "profile.txt");
-        if (!metrics || !observations || !profile)
+        std::ofstream events(output_directory / "events.csv");
+        if (!metrics || !observations || !profile || !events)
         {
             throw std::runtime_error("Cannot open output files");
         }
-        metrics << "image_id,time_ns,features,ratio_passed,inliers,geometry_valid,read_image_ms,frontend_ms\n";
-        observations << "image_id,time_ns,track_id,u,v\n";
+        metrics << "image_id,time_ns,features,ratio_passed,inliers,geometry_valid,read_image_ms,frontend_ms"
+                << ",detected,support_rejected,displacement_rejected,quality_rejected,inverse_rejected"
+                << ",quota_rejected,spacing_rejected";
+        for (auto const * name : frontend_stage_names)
+        {
+            metrics << ',' << name << "_ms," << name << "_process_peak_kib";
+        }
+        metrics << '\n';
+        observations << "image_id,time_ns,track_id,u,v,x,y,age\n";
+        events << "image_id,track_id,change\n";
         observations << std::setprecision(12);
         profile << "Input: " << input << "\nExecution: " << execution << "\nCamera: cam0 (mono)\n"
                 << "Session: 1; calibration binding: 1; noise-model binding: 1 (unqualified pixel model)\n"
@@ -136,11 +145,38 @@ int main(int argc, char ** argv)
             metrics << index + 1 << ',' << identity.time_ns << ',' << tracked.observations.size() << ','
                     << diagnostics.matches.descriptors.forward_ratio_passed << ',' << diagnostics.matches.inliers.size()
                     << ',' << diagnostics.matches.geometry_valid << ',' << milliseconds(start, loaded) << ',' << elapsed
-                    << '\n';
-            for (auto const & observation : tracked.observations)
+                    << ',' << diagnostics.features.localization.detected << ','
+                    << diagnostics.features.localization.support_rejected << ','
+                    << diagnostics.features.localization.displacement_rejected << ','
+                    << diagnostics.features.localization.quality_rejected << ',' << diagnostics.inverse_rejected << ','
+                    << diagnostics.selection.quota_rejected << ',' << diagnostics.selection.spacing_rejected;
+            for (auto const & stage : diagnostics.stages)
             {
+                metrics << ',';
+                if (stage.executed)
+                {
+                    metrics << stage.milliseconds;
+                }
+                metrics << ',';
+                if (stage.process_peak_kib != 0)
+                {
+                    metrics << stage.process_peak_kib;
+                }
+            }
+            metrics << '\n';
+            for (std::size_t i = 0; i < tracked.observations.size(); ++i)
+            {
+                auto const & observation = tracked.observations[i];
                 observations << index + 1 << ',' << identity.time_ns << ',' << observation.track_id << ','
-                             << observation.u << ',' << observation.v << '\n';
+                             << observation.u << ',' << observation.v << ',' << observation.x << ',' << observation.y
+                             << ',' << diagnostics.ages[i] << '\n';
+            }
+            for (auto const & event : tracked.events)
+            {
+                char const * change = event.change == TrackChange::started     ? "started"
+                                      : event.change == TrackChange::continued ? "continued"
+                                                                               : "ended";
+                events << index + 1 << ',' << event.track_id << ',' << change << '\n';
             }
             if (index >= 10)
             {
@@ -169,7 +205,8 @@ int main(int argc, char ** argv)
         metrics.flush();
         observations.flush();
         profile.flush();
-        if (!metrics || !observations || !profile)
+        events.flush();
+        if (!metrics || !observations || !profile || !events)
         {
             throw std::runtime_error("Output write failed");
         }

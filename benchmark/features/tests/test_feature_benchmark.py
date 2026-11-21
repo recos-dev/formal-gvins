@@ -25,21 +25,59 @@ class BenchmarkTests(unittest.TestCase):
                                     for i in range(100, 103)]}
 
     def native(self, workload):
-        raw = {"protocol": benchmark.PROTOCOL, "workload": workload, "execution": "cpu",
+        raw = {"protocol": benchmark.PROTOCOL, "workload": workload, "execution": "cpu", "width": 80, "height": 60,
                "adapter": {"wta_k": 2, "patch_size": 31, "edge_threshold": 31,
                            "score_type": "HARRIS", "descriptor_smoothing": "enabled"},
                "options": dict(self.profile["tracking"]), "frames": []}
-        for frame in self.manifest["frames"]:
+        for position, frame in enumerate(self.manifest["frames"]):
             result = dict(frame, status="success", frontend_ms=10, geometry_valid=0)
             if workload == "temporal":
-                result.update(features=1, ratio_passed=0, inliers=0, read_image_ms=2, observations=[[20, 20, "1"]])
+                continued = int(position > 0)
+                result.update(features=1, ratio_passed=continued, inliers=continued, read_image_ms=2,
+                              observations=[[20, 20, "1"]], ages=[str(position + 1)],
+                              events=[["1", "continued" if continued else "started"]])
             else:
                 result.update(source=[[20, 20, 1]], target=[[32, 12, 1]], matches=[[0, 0]])
+            count = result.get("inliers", 1)
+            result["diagnostics"] = {name: 0 for name in benchmark.COUNTS}
+            result["diagnostics"].update(detected=1, forward_ratio_passed=count, reverse_ratio_passed=count,
+                reciprocal_candidates=count, geometric_candidates=count)
+            result["stages"] = {stage: {"executed": 1, "ms": .1, "process_peak_kib": "1024"} for stage in benchmark.STAGES}
             raw["frames"].append(result)
         return raw
 
     def evaluate(self, raw):
         return benchmark.evaluate(raw, self.profile, self.manifest, raw["workload"], "cpu")
+
+    def test_lifetime_censoring_and_stage_samples(self):
+        raw = self.native("temporal")
+        result, rows = self.evaluate(raw)
+        self.assertEqual(result["track_lengths"]["completed"]["samples"], 0)
+        self.assertEqual(result["track_lengths"]["active_right_censored"]["max"], 3)
+        self.assertEqual(result["stages"]["detection"]["samples"], 2)
+        self.assertEqual(rows[1]["continued_tracks"], 1)
+        self.assertEqual(rows[0]["coverage_fraction"], 1 / 48)
+        raw["frames"][2].update(observations=[], ages=[], events=[["1", "ended"]], features=0, inliers=0)
+        raw["frames"][2]["diagnostics"]["quota_rejected"] = 1
+        result, _ = self.evaluate(raw)
+        self.assertEqual(result["track_lengths"]["completed"]["max"], 2)
+        self.assertEqual(result["track_lengths"]["active_right_censored"]["samples"], 0)
+
+    def test_inconsistent_diagnostics_and_history_are_rejected(self):
+        changes = [
+            lambda f: f.update(ages=["7"]),
+            lambda f: f.update(events=[["1", "started"]]),
+            lambda f: f["diagnostics"].update(detected=2),
+            lambda f: f["diagnostics"].update(geometric_candidates=99),
+            lambda f: f["stages"].pop("geometry"),
+            lambda f: f["stages"]["detection"].update(executed=0),
+            lambda f: f["stages"]["detection"].update(ms=float("nan")),
+        ]
+        for change in changes:
+            raw = self.native("temporal")
+            change(raw["frames"][1])
+            with self.subTest(change=change), self.assertRaises((ValueError, KeyError)):
+                self.evaluate(raw)
 
     def test_native_coordinates_reach_shared_scorer(self):
         temporal, _ = self.evaluate(self.native("temporal"))

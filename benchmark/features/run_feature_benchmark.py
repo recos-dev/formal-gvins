@@ -17,7 +17,7 @@ from feature_metrics import Match, Point, score_pair
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCHMARK_DIR.parent.parent
-PROTOCOL = "euroc-orb-v3"
+PROTOCOL = "euroc-orb-v4"
 WORKLOADS = ("temporal", "translation")
 ADAPTER_PROFILE = {"wta_k": 2, "patch_size": 31, "edge_threshold": 31,
                    "score_type": "HARRIS", "descriptor_smoothing": "enabled"}
@@ -32,6 +32,13 @@ CSV_FIELDS = (
     "evaluated_pairs", "repeatability", "precision", "recall", "rmse_all_px", "rmse_correct_px",
 )
 QUALITY_METRICS = ("repeatability", "precision", "recall", "rmse_all_px", "rmse_correct_px")
+STAGES = ("detection", "localization", "description", "unprojection", "matching", "geometry", "selection", "publication")
+COUNTS = ("detected", "support_rejected", "displacement_rejected", "quality_rejected", "inverse_rejected",
+          "forward_ratio_passed", "reverse_ratio_passed", "reciprocal_candidates", "geometric_candidates",
+          "quota_rejected", "spacing_rejected", "invalid_rejected", "rotation_checked")
+CSV_FIELDS += COUNTS + tuple(f"{stage}_{metric}" for stage in STAGES for metric in ("ms", "process_peak_kib")) + (
+    "started_tracks", "continued_tracks", "ended_tracks", "track_age_sum", "occupied_cells", "coverage_fraction")
+
 ERRORS = (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError)
 
 
@@ -71,6 +78,17 @@ def load_profile(path):
             or not 0 < options["confidence"] < 1 or options["epipolar_threshold"] <= 0 or not 0 < options["minimum_distance_px"] <= 16384
             or not options["grid_columns"] * options["grid_rows"] <= options["feature_capacity"] <= options["feature_count"]):
         raise ValueError("Invalid tracking option range or capacity")
+    for name, low, high in (("localization_window_radius", 1, 15), ("localization_iterations", 1, 100),
+                            ("inverse_iterations", 1, 32), ("rotation_iterations", 1, 1000)):
+        if type(options[name]) is not int or not low <= options[name] <= high:
+            raise ValueError(f"Invalid tracking option: {name}")
+    for name in ("localization_epsilon", "localization_maximum_displacement_px", "localization_minimum_eigenvalue",
+                 "localization_maximum_condition", "inverse_radius", "inverse_residual_px", "inverse_maximum_step",
+                 "inverse_minimum_slope", "epipolar_minimum_denominator", "rotation_support_fraction"):
+        if type(options[name]) not in (int, float) or not math.isfinite(options[name]) or options[name] <= 0:
+            raise ValueError(f"Invalid tracking option: {name}")
+    if options["localization_maximum_condition"] < 1 or not .8 <= options["rotation_support_fraction"] <= 1:
+        raise ValueError("Invalid localization/rotation qualification")
     return profile
 
 
@@ -154,6 +172,72 @@ def validate_native(raw, profile, manifest, workload, execution):
     return frames
 
 
+def telemetry(frame):
+    counts = frame["diagnostics"]
+    if set(counts) != set(COUNTS) or any(type(counts[name]) is not int or counts[name] < 0 for name in COUNTS):
+        raise ValueError("Malformed rejection diagnostics")
+    if counts["rotation_checked"] not in (0, 1):
+        raise ValueError("Invalid rotation-screen flag")
+    if not (counts["geometric_candidates"] <= counts["reciprocal_candidates"] <=
+            min(counts["forward_ratio_passed"], counts["reverse_ratio_passed"])):
+        raise ValueError("Inconsistent association counts")
+    if set(frame["stages"]) != set(STAGES):
+        raise ValueError("Missing/unexpected profiling stage")
+    values = dict(counts)
+    for stage in STAGES:
+        item = frame["stages"][stage]
+        if type(item["executed"]) is not int or item["executed"] not in (0, 1):
+            raise ValueError("Invalid stage execution flag")
+        timing_summary([item["ms"]])
+        rss = item["process_peak_kib"]
+        if not isinstance(rss, str) or not rss.isdecimal():
+            raise ValueError("Invalid process high-water RSS")
+        if not item["executed"] and (item["ms"] != 0 or int(rss) != 0):
+            raise ValueError("Unexecuted stage reports measurements")
+        values[f"{stage}_ms"] = item["ms"] if item["executed"] else None
+        values[f"{stage}_process_peak_kib"] = int(rss) if int(rss) > 0 else None
+    return values
+
+
+def lifecycle(frame, active, seen, profile, width, height):
+    observations = {track: (u, v) for u, v, track in frame["observations"]}
+    events = frame["events"]
+    if (any(not isinstance(item, list) or len(item) != 2 or item[1] not in ("started", "continued", "ended") for item in events)
+            or len({item[0] for item in events}) != len(events)):
+        raise ValueError("Malformed lifecycle events")
+    groups = {kind: {track for track, change in events if change == kind} for kind in ("started", "continued", "ended")}
+    old, current = set(active), set(observations)
+    if (groups["started"] != current - old or groups["continued"] != current & old or groups["ended"] != old - current
+            or groups["started"] & seen or len(groups["continued"]) != frame["inliers"]):
+        raise ValueError("Lifecycle disagrees with observation identity/history")
+    expected = {track: active.get(track, 0) + 1 for track in observations}
+    ages = frame["ages"]
+    if (len(ages) != len(observations) or any(not isinstance(age, str) or not age.isdecimal() for age in ages)
+            or [int(age) for age in ages] != list(expected.values())):
+        raise ValueError("Incorrect track ages")
+    columns, rows = profile["tracking"]["grid_columns"], profile["tracking"]["grid_rows"]
+    cells = set()
+    for u, v in observations.values():
+        if not 0 <= u < width or not 0 <= v < height:
+            raise ValueError("Observation outside raw image")
+        cells.add((int(u * columns / width), int(v * rows / height)))
+    ended = [active[track] for track in groups["ended"]]
+    active.clear()
+    active.update(expected)
+    seen.update(current)
+    return dict(started_tracks=len(groups["started"]), continued_tracks=len(groups["continued"]),
+                ended_tracks=len(groups["ended"]), track_age_sum=sum(expected.values()),
+                occupied_cells=len(cells), coverage_fraction=len(cells) / (rows * columns)), ended
+
+
+def length_summary(values):
+    ordered = sorted(values)
+    return {"samples": len(values), "mean": statistics.fmean(values) if values else None,
+            "median": statistics.median(values) if values else None,
+            "p95": ordered[math.ceil(.95 * len(values)) - 1] if values else None,
+            "max": ordered[-1] if values else None}
+
+
 def temporal_metrics(frame, capacity):
     observations = frame["observations"]
     if (type(frame["features"]) is not int or not 0 <= frame["features"] <= capacity
@@ -177,6 +261,9 @@ def summarize(rows, profile, workload):
     successful = [row for row in rows if row["status"] == "success"]
     timed = [row for row in successful if row["frame_index"] >= profile["first_frame"] + profile["warmup_frames"]]
     summary["frontend"] = timing_summary([row["frontend_ms"] for row in timed])
+    summary["stages"] = {stage: dict(timing_summary([row[f"{stage}_ms"] for row in timed if row.get(f"{stage}_ms") is not None]),
+        process_peak_kib=max((row[f"{stage}_process_peak_kib"] for row in successful if row.get(f"{stage}_process_peak_kib") is not None), default=None)) for stage in STAGES}
+    summary["diagnostics"] = {name: sum(row.get(name, 0) for row in successful) for name in COUNTS}
     if workload == "temporal":
         summary.update(
             read_image=timing_summary([row["read_image_ms"] for row in timed]),
@@ -185,6 +272,8 @@ def summarize(rows, profile, workload):
             empty_frames=sum(row["features"] == 0 for row in successful),
             geometry_invalid_frames=sum(row["geometry_valid"] == 0 for row in successful),
             mean_features=statistics.fmean(row["features"] for row in successful) if successful else None,
+            mean_coverage=statistics.fmean(row["coverage_fraction"] for row in successful if "coverage_fraction" in row) if any("coverage_fraction" in row for row in successful) else None,
+            mean_observed_track_age=(sum(row.get("track_age_sum", 0) for row in successful)/sum(row["features"] for row in successful)) if any(row.get("track_age_sum") for row in successful) else None,
         )
     else:
         summary["reference"] = "Known synthetic translation; full OrbTracker accepted matches"
@@ -199,19 +288,37 @@ def summarize(rows, profile, workload):
 def evaluate(raw, profile, manifest, workload, execution):
     frames = validate_native(raw, profile, manifest, workload, execution)
     rows = scheduled_rows(manifest, workload)
+    lifecycle_available = len(frames) == len(rows) and all(frame["status"] == "success" for frame in frames.values())
+    active, seen, completed = {}, set(), []
+    interrupted = 0
     for row in rows:
         frame = frames.get(row["frame_index"])
         if frame is None:
             continue
         row.update(status=frame["status"], error=frame.get("error", ""))
+        if frame["status"] == "failed":
+            interrupted += len(active)
+            active.clear()
         if frame["status"] == "success":
+            row.update(telemetry(frame))
             if workload == "temporal":
                 row.update(temporal_metrics(frame, profile["tracking"]["feature_capacity"]))
                 timing_summary([frame["read_image_ms"]])
+                if lifecycle_available:
+                    extra, ended = lifecycle(frame, active, seen, profile, raw["width"], raw["height"])
+                    row.update(extra)
+                    completed.extend(ended)
+                rejected = sum(row[name] for name in ("support_rejected", "displacement_rejected", "quality_rejected", "inverse_rejected", "quota_rejected", "spacing_rejected", "invalid_rejected"))
+                if row["features"] + rejected != row["detected"] or row["inliers"] > row["geometric_candidates"]:
+                    raise ValueError("Candidate accounting does not close")
             else:
                 row.update(translation_metrics(frame, profile))
             timing_summary([frame["frontend_ms"]])  # Validate warmup samples too.
-    return summarize(rows, profile, workload), rows
+    summary = summarize(rows, profile, workload)
+    if workload == "temporal":
+        summary["track_lengths"] = {"status": "complete" if lifecycle_available else "unavailable", "completed": length_summary(completed), "active_right_censored": length_summary(list(active.values())),
+                                    "interrupted_by_failed_frame": interrupted}
+    return summary, rows
 
 
 def write_json(path, value):

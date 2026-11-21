@@ -67,6 +67,7 @@ struct OrbMatchResult
 struct OrbTrackingDiagnostics
 {
     OrbFeatures features;
+    FrontendMetrics stages{};
     OrbMatchResult matches;
     SelectionStats selection;
     std::vector<std::uint64_t> ages;

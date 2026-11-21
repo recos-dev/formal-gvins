@@ -1,5 +1,5 @@
 {
-  "protocol": "euroc-orb-v3",
+  "protocol": "euroc-orb-v4",
   "dataset": "euroc/MH_01_easy/mav0",
   "camera": 0,
   "first_frame": 100,
@@ -21,6 +21,20 @@
     "ratio": 0.75,
     "epipolar_threshold": 0.003,
     "confidence": 0.99,
-    "ransac_iterations": 2000
+    "ransac_iterations": 2000,
+    "localization_window_radius": 5,
+    "localization_iterations": 20,
+    "localization_epsilon": 0.001,
+    "localization_maximum_displacement_px": 2,
+    "localization_minimum_eigenvalue": 0.0001,
+    "localization_maximum_condition": 100,
+    "inverse_radius": 2,
+    "inverse_residual_px": 1e-08,
+    "inverse_maximum_step": 0.5,
+    "inverse_minimum_slope": 0.0001,
+    "inverse_iterations": 20,
+    "epipolar_minimum_denominator": 1e-12,
+    "rotation_iterations": 100,
+    "rotation_support_fraction": 0.9
   }
 }
