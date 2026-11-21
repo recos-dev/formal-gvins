@@ -91,6 +91,21 @@ public:
     void reset();
 
 private:
+    friend class StereoOrbTracker;
+    struct PendingFrame
+    {
+        TrackedImage tracked;
+        OrbTrackingDiagnostics diagnostics;
+        cv::Size image_size;
+        OrbFeatures history;
+        std::vector<FeatureObservation> observations;
+        std::vector<std::uint64_t> ages;
+    };
+    [[nodiscard]] VisionStatus prepare(ImageIdentity const & identity, cv::Mat const & image, cv::Mat const & mask,
+                                       PendingFrame & pending, bool inspect);
+    [[nodiscard]] VisionStatus finish(PendingFrame & pending, std::uint64_t & next_id, bool inspect);
+    void commit(PendingFrame & pending, TrackedImage & output, OrbTrackingDiagnostics * diagnostics);
+
     OrbTrackingOptions m_options;
     OrbExtractor m_extractor;
     bool m_valid = false;

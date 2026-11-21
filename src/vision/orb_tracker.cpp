@@ -37,6 +37,24 @@ OrbTracker::OrbTracker(OrbTrackingOptions const & options)
 VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const & image, cv::Mat const & mask,
                                  TrackedImage & output, OrbTrackingDiagnostics * diagnostics)
 {
+    PendingFrame pending;
+    auto status = prepare(identity, image, mask, pending, diagnostics != nullptr);
+    auto next_id = m_next_track_id;
+    if (status == VisionStatus::success)
+    {
+        status = finish(pending, next_id, diagnostics != nullptr);
+    }
+    if (status == VisionStatus::success)
+    {
+        commit(pending, output, diagnostics);
+        m_next_track_id = next_id;
+    }
+    return status;
+}
+
+VisionStatus OrbTracker::prepare(ImageIdentity const & identity, cv::Mat const & image, cv::Mat const & mask,
+                                 PendingFrame & pending, bool inspect)
+{
     if (!m_valid || identity.session_id == 0 || identity.calibration_id == 0 || identity.noise_model_id == 0 ||
         (m_have_previous &&
          (identity.session_id != m_identity.session_id || identity.camera_id != m_identity.camera_id ||
@@ -47,19 +65,19 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         return VisionStatus::invalid_input;
     }
     OrbFeatures detected;
-    OrbTrackingDiagnostics details;
-    VisionStatus status =
-        m_extractor.extract(image, mask, detected, diagnostics != nullptr ? &details.stages : nullptr);
+    auto & details = pending.diagnostics;
+    VisionStatus status = m_extractor.extract(image, mask, detected, inspect ? &details.stages : nullptr);
     if (status != VisionStatus::success)
     {
         return status;
     }
     try
     {
-        TrackedImage candidate;
+        auto & candidate = pending.tracked;
+        pending.image_size = image.size();
         candidate.identity = identity;
         candidate.pixel_domain = PixelDomain::raw;
-        StageTimer timer(diagnostics != nullptr ? &details.stages : nullptr, FrontendStage::unprojection);
+        StageTimer timer(inspect ? &details.stages : nullptr, FrontendStage::unprojection);
         details.features.localization = detected.localization;
         for (std::size_t i = 0; i < detected.keypoints.size(); ++i)
         {
@@ -153,8 +171,21 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         candidate.observations = std::move(observations);
         details.features = std::move(selected);
         details.ages = std::move(ages);
-        timer.next(FrontendStage::publication);
-        auto next_id = m_next_track_id;
+        return VisionStatus::success;
+    }
+    catch (cv::Exception const &)
+    {
+        return VisionStatus::backend_failure;
+    }
+}
+
+VisionStatus OrbTracker::finish(PendingFrame & pending, std::uint64_t & next_id, bool inspect)
+{
+    auto & candidate = pending.tracked;
+    auto & details = pending.diagnostics;
+    try
+    {
+        StageTimer timer(inspect ? &details.stages : nullptr, FrontendStage::publication);
         for (std::size_t index = 0; index < candidate.observations.size(); ++index)
         {
             auto & observation = candidate.observations[index];
@@ -188,35 +219,37 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         }
         // Complete allocations before committing history. Caller-owned results
         // cannot mutate descriptors retained for the next temporal match.
-        OrbFeatures history;
-        if (diagnostics != nullptr)
+        if (inspect)
         {
-            history = {details.features.keypoints, details.features.descriptors.clone(), details.features.localization};
+            pending.history = {details.features.keypoints, details.features.descriptors.clone(),
+                               details.features.localization};
         }
         else
         {
-            history = std::move(details.features);
+            pending.history = std::move(details.features);
         }
-        observations = candidate.observations;
-        ages = details.ages;
-        timer.finish();
-        m_previous = std::move(history);
-        m_observations = std::move(observations);
-        m_ages = std::move(ages);
-        m_identity = identity;
-        m_image_size = image.size();
-        m_next_track_id = next_id;
-        m_have_previous = true;
-        output = std::move(candidate);
-        if (diagnostics != nullptr)
-        {
-            *diagnostics = std::move(details);
-        }
+        pending.observations = candidate.observations;
+        pending.ages = details.ages;
         return VisionStatus::success;
     }
     catch (cv::Exception const &)
     {
         return VisionStatus::backend_failure;
+    }
+}
+
+void OrbTracker::commit(PendingFrame & pending, TrackedImage & output, OrbTrackingDiagnostics * diagnostics)
+{
+    m_previous = std::move(pending.history);
+    m_observations = std::move(pending.observations);
+    m_ages = std::move(pending.ages);
+    m_identity = pending.tracked.identity;
+    m_image_size = pending.image_size;
+    m_have_previous = true;
+    output = std::move(pending.tracked);
+    if (diagnostics != nullptr)
+    {
+        *diagnostics = std::move(pending.diagnostics);
     }
 }
 
