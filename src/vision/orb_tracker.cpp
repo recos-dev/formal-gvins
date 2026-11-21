@@ -164,6 +164,21 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
                 details.ages[index] = 1;
             }
         }
+        std::vector<std::uint64_t> active_ids;
+        for (std::size_t i = 0; i < candidate.observations.size(); ++i)
+        {
+            auto const id = candidate.observations[i].track_id;
+            active_ids.push_back(id);
+            candidate.events.push_back({id, details.ages[i] == 1 ? TrackChange::started : TrackChange::continued});
+        }
+        std::sort(active_ids.begin(), active_ids.end());
+        for (auto const & previous : m_observations)
+        {
+            if (!std::binary_search(active_ids.begin(), active_ids.end(), previous.track_id))
+            {
+                candidate.events.push_back({previous.track_id, TrackChange::ended});
+            }
+        }
         // Complete allocations before committing history. Caller-owned results
         // cannot mutate descriptors retained for the next temporal match.
         OrbFeatures history;

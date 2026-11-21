@@ -27,7 +27,7 @@ tracker, not to a common ORB-shaped options structure. A template caller may bin
 a concrete tracker through these named operations without virtual dispatch.
 
 The owning `TrackedImage` result shall contain image bindings, an explicit pixel
-domain and `FeatureObservation` records under V-OBSERVATION. It shall not require
+domain, `FeatureObservation` records and per-camera lifecycle events under V-OBSERVATION. It shall not require
 keypoints, descriptors, descriptor distances or geometry-estimator containers.
 The common result header shall compile without OpenCV or a particular tracking
 method. This host container may allocate; numerical consumers shall use its
@@ -58,9 +58,17 @@ CUDA work producing a returned result shall complete before successful return.
 Returned descriptors shall own host storage, and retained history shall not alias
 mutable caller output. Backend containers/device buffers shall not enter numerical
 estimator state or equations. A successful featureless image shall publish an
-empty set and retire previous temporal continuations. Reset shall retire temporal
+empty set and end every previous temporal continuation. A missing/invalid image
+shall fail without generating retirement events. Each successful frame shall
+explicitly identify started, continued and ended IDs for that camera. Reset shall retire temporal
 history without reusing track IDs. Changes of camera/session/calibration/noise
 binding or image geometry require an explicit reset of this tracker profile.
+Reset itself retires all current tracks; it does not modify an already returned
+snapshot or reuse counters. Camera parameters remain fixed for the lifetime of
+the object. A different numerical calibration requires a new configured object
+and a fresh acquisition session; changing an integer calibration ID alone does
+not change the camera model. IDs are unique within the owning tracker/session,
+not across independently constructed trackers.
 
 Host allocation and exceptions are permitted here. Standard allocation exceptions
 are not promised a VisionStatus translation; they shall not be mistaken for a
@@ -87,3 +95,9 @@ reset. Check both outputs' failure atomicity and observation/diagnostic pairing.
 Deployment allocation-failure recovery, overload behavior and timing/memory limits
 are not selected. The current blocking interface does not authorize an unreviewed
 asynchronous pipeline or automatic backend switching.
+
+On GNU/Clang ELF hosts, `tracker_failure` wraps the pinned OpenCV essential-fit
+symbol in that test executable only. It forces a backend exception after initial
+history exists and compares a successful retry against an untouched control
+tracker. Production code has no fault hook. This checks exception handling and
+transaction boundaries, not physical GPU/driver fault recovery.

@@ -69,3 +69,12 @@ verify that coordinate-domain metadata agrees with the actual processing path.
 The current ImageIdentity/FeatureObservation and tracker implement only the
 frontend portion; store-level evidence is required before accepting the whole
 contract.
+
+## Host lifecycle publication
+
+Each successful image batch shall include one `started` or `continued` event
+for each current observation and one `ended` event for each previous camera-local
+ID absent from the new active set. An empty successful set ends all previous
+tracks. A failed call publishes no changes. Reset is an explicit retirement of
+the owner's entire active set; the next frame starts new IDs. Events do not
+authorize reuse of old measurements or merging independent camera identities.

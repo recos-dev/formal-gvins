@@ -29,6 +29,9 @@ bool same_observations(TrackedImage const & a, TrackedImage const & b)
     return x.session_id == y.session_id && x.camera_id == y.camera_id && x.image_id == y.image_id &&
            x.time_ns == y.time_ns && x.calibration_id == y.calibration_id && x.noise_model_id == y.noise_model_id &&
            a.pixel_domain == b.pixel_domain &&
+           std::equal(a.events.begin(), a.events.end(), b.events.begin(), b.events.end(),
+                      [](auto const & x, auto const & y)
+                      { return x.track_id == y.track_id && x.change == y.change; }) &&
            std::equal(a.observations.begin(), a.observations.end(), b.observations.begin(), b.observations.end(),
                       [](FeatureObservation const & p, FeatureObservation const & q)
                       { return p.track_id == q.track_id && p.u == q.u && p.v == q.v && p.x == q.x && p.y == q.y; });
@@ -260,6 +263,10 @@ int main(int argc, char ** argv)
                         "spacing across all cells and scales");
         }
     }
+    test.expect(output.events.size() == output.observations.size() &&
+                    std::all_of(output.events.begin(), output.events.end(),
+                                [](auto const & event) { return event.change == TrackChange::started; }),
+                "lifecycle", "new frame events");
     auto const first_ids = ids;
     diagnostics.features.descriptors.setTo(0);
     auto const saved_output = output;
@@ -290,6 +297,21 @@ int main(int argc, char ** argv)
                     "only retained associations age");
     }
     test.expect(continued == diagnostics.matches.inliers.size(), "tracking", "only verified matches inherit IDs");
+    std::set<std::uint64_t> ended;
+    std::size_t event_continued = 0;
+    for (auto const & event : output.events)
+    {
+        if (event.change == TrackChange::ended)
+        {
+            ended.insert(event.track_id);
+        }
+        if (event.change == TrackChange::continued)
+        {
+            ++event_continued;
+        }
+    }
+    test.expect(event_continued == continued && ended.size() + continued == first_ids.size(), "lifecycle",
+                "continuation and retirement partition history");
     auto const last_id = output.identity.image_id;
     ++identity.calibration_id;
     test.expect(tracker.process(identity, shifted, {}, output, &diagnostics) == VisionStatus::invalid_input &&
@@ -302,6 +324,9 @@ int main(int argc, char ** argv)
                         VisionStatus::success &&
                     output.observations.empty(),
                 "tracking", "empty frame retires history");
+    test.expect(std::all_of(output.events.begin(), output.events.end(),
+                            [](auto const & event) { return event.change == TrackChange::ended; }),
+                "lifecycle", "valid featureless frame retires previous tracks");
     tracker.reset();
     ++identity.image_id;
     identity.time_ns += 50000000;

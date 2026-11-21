@@ -415,3 +415,20 @@ match indices are reindexed together. Diagnostics distinguish pre-selection
 reciprocal/geometric counts from published matches, and report quota/spacing
 rejections. `feature_selection` tests ordering, exact spacing boundaries, identity
 validation and dense candidate accounting independently of ORB detection.
+
+### Track lifecycle and failures
+
+`TrackedImage.events` explicitly publishes `started`, `continued` and `ended`
+for this camera. A valid featureless frame ends its old tracks; a missing image
+is an error and preserves history. Event and observation vectors own their data.
+Diagnostic age counts successful observations in this camera, not elapsed time.
+Reset clears history without reusing IDs and leaves already returned snapshots
+unchanged. A new object requires a fresh session if its counters could overlap
+old records; its numerical calibration is fixed at construction.
+
+`tracker_failure` uses an ELF linker wrapper in its test executable to force
+an OpenCV geometry exception after history exists, then verifies output/history
+atomicity and a retry against a control tracker. This adds no production callback
+or mock tracker and does not claim to emulate device loss. Other host tests cover
+backwards/duplicate time, image size and binding changes, reset, featureless
+images, unavailable backends and caller mutation of returned data.

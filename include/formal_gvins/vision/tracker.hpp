@@ -27,6 +27,19 @@ enum class Execution
     cuda,
 };
 
+enum class TrackChange
+{
+    started,
+    continued,
+    ended,
+};
+
+struct TrackEvent
+{
+    std::uint64_t track_id = 0;
+    TrackChange change = TrackChange::started;
+};
+
 /**
  * Owning host-side observation batch, independent of the tracking method.
  * Success replaces the complete active set for this camera image; a failed
@@ -39,6 +52,7 @@ struct TrackedImage
     ImageIdentity identity;
     PixelDomain pixel_domain = PixelDomain::unspecified;
     std::vector<FeatureObservation> observations;
+    std::vector<TrackEvent> events; // Current-camera changes on this successful frame.
 };
 
 } /* end namespace formal_gvins::vision */
