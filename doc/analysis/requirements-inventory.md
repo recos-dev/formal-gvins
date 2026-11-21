@@ -6,8 +6,8 @@ The [index](../spec/README.md) owns requirement discovery and Draft status;
 [verification policy](../spec/verification.md) owns evidence acceptance. This
 inventory maps each requirement once to current production symbols/test sources
 and remaining work. It covers bounded linalg, MSCKF mathematical operations, the
-frontend and the EuRoC adapter; each execution record must independently bind
-actual source content/revision.
+frontend, the EuRoC adapter and reusable runtime storage; each execution record
+must independently bind actual source content/revision.
 No test or proof execution is claimed by this document.
 
 ## Scope
@@ -18,7 +18,8 @@ No test or proof execution is claimed by this document.
 | Reusable mathematics | 24 |
 | Acquisition, frontend and track ownership | 9 |
 | Local MSCKF parent and children | 10 |
-| Total / Draft / Approved | 49 / 49 / 0 |
+| Runtime storage | 1 |
+| Total / Draft / Approved | 50 / 50 / 0 |
 
 All original IDs are retained. V-TRACK has three children, V-ORB two (stereo is
 conditional), SW-MSCKF eight and M-VISUAL one. These links allocate responsibility,
@@ -90,6 +91,12 @@ frontend tests do not establish physical association or navigation accuracy.
 | [V-OBSERVATION](../spec/requirements/vision/observation-admission.md) | Partial | [ImageIdentity/FeatureObservation](../../include/formal_gvins/vision/observation.hpp), [TrackedImage](../../include/formal_gvins/vision/tracker.hpp); [tests](../../tests/test_tracker.cpp) | Frontend identity, coordinate-domain and complete-set lifecycle only; stereo supplies cross-camera identity, while the estimator observation-store admission/consumption boundary remains absent. |
 | [V-ASSOCIATION](../spec/requirements/vision/track-association.md) | Planned | Mathematical clone operations and frontend history exist; no estimator owner binds observation histories to clones. | Implement stable time/clone links, capacity and cross-owner lifetime after runtime profile review. |
 | [V-CONSUMPTION](../spec/requirements/vision/observation-consumption.md) | Planned | No estimator consumption ledger/transaction. | Implement once-only records and complete correction/cache/ledger publication; exercise failed/retried updates. |
+
+## Runtime storage
+
+| Requirement | Implementation scope | Source / test pointers | Review or evidence gap |
+|---|---|---|---|
+| [R-RING-BUFFER](../spec/requirements/runtime/ring-buffer.md) | Present | [RingBuffer](../../include/formal_gvins/runtime/ring_buffer.hpp); [storage tests](../../tests/test_ring_buffer.cpp): `boundaries`, `sequences`, `bounded_work`; [IMU fixture](../../tests/test_msckf_imu.cpp): `retained_imu_interval` | Native storage/interval fixtures, not a complete IMU history owner. Local Lean/ESBMC, retention/overflow integration and target timing remain unestablished; upstream proofs do not transfer to the revised API. |
 
 ## Local MSCKF
 

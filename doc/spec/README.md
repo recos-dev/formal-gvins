@@ -75,6 +75,15 @@ the estimator's observation store. V-ORB allocates localization and conditional
 stereo association to V-LOCALIZE and V-STEREO; temporal association remains in
 the parent. These links allocate requirements, not completed verification.
 
+## Runtime storage
+
+| ID | Requirement | Status |
+|---|---|---|
+| `R-RING-BUFFER` | [Fixed-capacity retained sequence](requirements/runtime/ring-buffer.md) | Draft |
+
+The storage contract is independent of sensor timing and execution policy. IMU
+coverage/retirement and cross-thread handoff remain owner/integration obligations.
+
 ## Local MSCKF capability
 
 | ID | Requirement | Status |
