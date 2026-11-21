@@ -164,8 +164,38 @@ Taylor and rounding bounds remain numerical acceptance work (group 11). An angle
 limit is a domain rule, not a proved consistency guarantee. C++ rollback, rejected
 updates and sensor/observation consumption remain separate source/runtime claims.
 
-## Remaining sequence
+## Group 7: FEJ gauge and composition
 
-Group 7 is listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
-and will receive its own theorem/premise mapping as implemented. Groups 8–11
-remain backlog. No completion percentage is inferred from declaration counts.
+Requirement: M-FEJ. Sources: `msckf/prediction.hpp`, `camera.hpp`,
+`correction.hpp` and `clones.hpp`. First-estimate values, not corrected nominal
+values, are the arguments of the gauge/Jacobian models below.
+
+| Statements | Exact claim and premises |
+|---|---|
+| `FEJ`: `gaugeError`, `imuGauge`, `gauge_independent` | Three global translations plus rotation about the nonzero gravity direction form four independent gauge combinations for an orthogonal attitude. Additional motion/geometry degeneracy is not excluded. |
+| `gauge_transport`, `gauge_transport_matrix`, `joint_gauge_transport` | The full selected Psi transports frozen IMU gauge columns to the next reference while preserving clone gauge rows. Gravity is parallel to the yaw axis. |
+| `JacobianFrames`: `rightJacobian_neg_frame`, `rightJacobian_transported` | E(phi)-transpose Jr(-phi)=Jr(phi), proved through quaternion derivatives and uniqueness, without assuming the frame identity. |
+| `FEJ`: `transition_reduces_to_ordinary`, `transition_from_nominal_mean` | When frozen/current endpoints agree with the held-input mean, all 25 blocks reduce to the ordinary right-local structure, including bias blocks invisible to the gauge identity. A/B coefficients remain the integral/evaluation objects of group 4. |
+| `visual_gauge_cancellation`, `visual_gauge_matrix` | Hx*N+Hf*Nf=0 before feature elimination. Every term uses the same frozen geometric quantities and common projection/extrinsic factor J. No pinhole/distortion derivative theorem is assumed proved here. |
+| `row_transform_gauge`, `feature_elimination_gauge`, `compress_gauge`, `correction_gauge` | Common whitening, annihilating feature projection, optional row compression and (I-KH) preserve the gauge. The elimination condition comes from group 2 for admitted full-rank reductions. |
+| `augment_gauge`, `remove_gauge`, `frozen_gauge_after_injection`, `gauge_composition` | Explicit clone row maps, unchanged first estimates and sequential transition composition preserve the selected gauge model. Group 3 binds the copied coordinates; group 6 binds identity reset. |
+
+These are linear-model observability identities, not proofs of four zero
+covariance eigenvalues, statistical consistency, valid feature matching or accuracy.
+The camera derivative, assembled feature constraints, runtime ownership and C++
+FEJ-cache mutation need their own evidence. Absolute GNSS, heading and map feedback
+change the gauge model and are outside these claims.
+
+## Deferred claims
+
+Groups 8–11 remain in the [work list](../roadmap.md#exact-lean-proof-sequence):
+camera projection/inverse, temporal/stereo geometry, frontend discrete behavior,
+and full numerical approximation/rounding bounds. The conditional domains noted
+above remain visible: continuous derivative interchange needs analytic domination;
+the reset bound needs a justified operator-norm epsilon. These are not discharged
+by passing native tests or by counting Lean declarations.
+
+No source-level refinement, C++ failure-path proof, backend-wide verification,
+full VINS integration, trajectory accuracy or real-time claim is implied by this
+suite. Requirement approval remains separate. Review this mapping when changing
+formulas, dimensions, evaluation branches or the FEJ/reset policy.
