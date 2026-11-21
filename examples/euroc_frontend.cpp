@@ -133,8 +133,8 @@ int main(int argc, char ** argv)
             auto const processed = Clock::now();
             double const elapsed = milliseconds(loaded, processed);
             metrics << index + 1 << ',' << identity.time_ns << ',' << tracked.observations.size() << ','
-                    << diagnostics.matches.ratio_passed << ',' << diagnostics.matches.inliers.size() << ','
-                    << diagnostics.matches.geometry_valid << ',' << milliseconds(start, loaded) << ',' << elapsed
+                    << diagnostics.matches.descriptors.forward_ratio_passed << ',' << diagnostics.matches.inliers.size()
+                    << ',' << diagnostics.matches.geometry_valid << ',' << milliseconds(start, loaded) << ',' << elapsed
                     << '\n';
             for (auto const & observation : tracked.observations)
             {

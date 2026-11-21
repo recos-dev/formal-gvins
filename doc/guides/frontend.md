@@ -364,3 +364,13 @@ intersections with varied angle, contrast and blur, plus failure/support tests.
 Its 0.15 raw-pixel test bound applies to those fixtures; it is not a measured
 real-camera noise covariance. Real-image and per-octave noise qualification
 remains necessary before using observations in an estimator.
+
+### Reciprocal descriptor association
+
+Temporal association now computes 2-NN Hamming candidates in both directions.
+Each direction must pass the strict ratio (initial value 0.75), and both best
+choices must point to each other. Equal distances, including two zero distances,
+and a missing second candidate reject. A collision is resolved by mutual best,
+not a greedy distance sort. Malformed indices, repeated queries or invalid
+distances fail without publishing a partial result. This gives one-to-one
+associations before geometry; no absolute Hamming cutoff is enabled.

@@ -190,7 +190,7 @@ void write_temporal(cv::FileStorage & output, Frame const & tracked, double read
            << std::to_string(tracked.tracks.identity.time_ns) << "status"
            << "success"
            << "features" << static_cast<int>(tracked.diagnostics.features.keypoints.size()) << "ratio_passed"
-           << static_cast<int>(tracked.diagnostics.matches.ratio_passed) << "inliers"
+           << static_cast<int>(tracked.diagnostics.matches.descriptors.forward_ratio_passed) << "inliers"
            << static_cast<int>(tracked.diagnostics.matches.inliers.size()) << "geometry_valid"
            << static_cast<int>(tracked.diagnostics.matches.geometry_valid) << "read_image_ms" << read_ms
            << "frontend_ms" << frontend_ms << "observations"

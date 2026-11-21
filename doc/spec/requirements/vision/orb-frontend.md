@@ -123,3 +123,11 @@ choices and acceptance gaps; it does not approve those values for deployment.
 ## Decomposition
 
 [V-LOCALIZE](feature-localization.md) owns subpixel localization before description.
+
+## Reciprocal descriptor admission
+
+Before geometric screening, both directions shall pass a strict nearest/second
+nearest ratio test and agree on their best partner. Ties and missing second
+neighbors reject; no greedy arbitration shall replace this mutual-best condition.
+Malformed indices, distances or duplicate queries fail atomically. The current
+profile uses ratio 0.75 with no absolute Hamming gate.

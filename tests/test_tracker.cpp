@@ -34,6 +34,43 @@ bool same_observations(TrackedImage const & a, TrackedImage const & b)
                       { return p.track_id == q.track_id && p.u == q.u && p.v == q.v && p.x == q.x && p.y == q.y; });
 }
 
+void test_reciprocal(formal_gvins::test::Context & test)
+{
+    using namespace formal_gvins::vision;
+    using Neighbors = std::vector<std::vector<cv::DMatch>>;
+    Neighbors forward{{{0, 0, 10}, {0, 1, 100}}, {{1, 0, 20}, {1, 1, 100}}};
+    Neighbors reverse{{{0, 1, 20}, {0, 0, 100}}, {{1, 0, 10}, {1, 1, 100}}};
+    DescriptorMatches result;
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::success &&
+                    result.matches.size() == 1 && result.matches[0].queryIdx == 1 && result.matches[0].trainIdx == 0,
+                "reciprocal", "many-to-one conflict resolved by mutual best, not greedy distance");
+    reverse[0][1].distance = 20;
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::success &&
+                    result.matches.empty(),
+                "reciprocal", "reverse ambiguity rejects forward-pass candidate");
+    reverse[0][1].distance = 100;
+    forward[1][0].distance = 75;
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::success &&
+                    result.matches.empty(),
+                "reciprocal", "ratio equality rejected");
+    forward[1][0].distance = 0;
+    forward[1][1].distance = 0;
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::success &&
+                    result.matches.empty(),
+                "reciprocal", "zero-distance tie rejected");
+    forward[1].resize(1);
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::success &&
+                    result.matches.empty(),
+                "reciprocal", "missing second neighbor is not confidence");
+    auto saved = result.forward_ratio_passed;
+    reverse[0][0].trainIdx = 2;
+    test.expect(reciprocal_matches(forward, reverse, 2, 2, .75F, result) == VisionStatus::invalid_input &&
+                    result.forward_ratio_passed == saved,
+                "reciprocal", "malformed reverse list preserves output");
+    test.expect(reciprocal_matches({}, {}, 0, 0, .75F, result) == VisionStatus::success && result.matches.empty(),
+                "reciprocal", "empty candidate domains");
+}
+
 void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOptions const & options,
                                cv::Mat const & image)
 {
@@ -96,6 +133,7 @@ int main(int argc, char ** argv)
     using namespace formal_gvins::vision;
     formal_gvins::test::Context test;
     cv::setNumThreads(1);
+    test_reciprocal(test);
     cv::RNG random(71);
     OrbTrackingOptions options;
     options.camera = {300, 300, 300, 200};
@@ -118,10 +156,12 @@ int main(int argc, char ** argv)
         current.keypoints.emplace_back(p, 1);
         neighbors.push_back({cv::DMatch(i, i, 10), cv::DMatch(i, (i + 1) % 80, 100)});
     }
+    auto const reverse = neighbors;
     OrbMatchResult matches;
     OrbTrackingOptions geometry_options = options;
     geometry_options.epipolar_threshold = 0.1 / 300;
-    test.expect(verify_matches(previous, current, neighbors, geometry_options, matches) == VisionStatus::success &&
+    test.expect(verify_matches(previous, current, neighbors, reverse, geometry_options, matches) ==
+                        VisionStatus::success &&
                     matches.geometry_valid,
                 "geometry", "nonplanar calibrated scene");
     std::size_t true_inliers = 0, false_inliers = 0;
@@ -139,8 +179,9 @@ int main(int argc, char ** argv)
     test.expect(true_inliers >= 60 && false_inliers <= 2, "geometry", "known outlier rejection");
     auto conflicting = neighbors;
     conflicting.push_back({cv::DMatch(64, 0, 20), cv::DMatch(64, 1, 100)});
-    test.expect(verify_matches(previous, current, conflicting, geometry_options, matches) == VisionStatus::success,
-                "matching", "conflicting descriptor proposals");
+    test.expect(verify_matches(previous, current, conflicting, reverse, geometry_options, matches) ==
+                    VisionStatus::invalid_input,
+                "matching", "duplicate query proposal rejected");
     std::set<int> query_indices, train_indices;
     for (auto const & match : matches.inliers)
     {
@@ -150,7 +191,8 @@ int main(int argc, char ** argv)
     auto const retained_count = matches.inliers.size();
     auto malformed = neighbors;
     malformed[0][0].trainIdx = -1;
-    test.expect(verify_matches(previous, current, malformed, options, matches) == VisionStatus::invalid_input &&
+    test.expect(verify_matches(previous, current, malformed, reverse, options, matches) ==
+                        VisionStatus::invalid_input &&
                     matches.inliers.size() == retained_count,
                 "matching", "invalid index preserves result");
     auto tied = neighbors;
@@ -158,17 +200,17 @@ int main(int argc, char ** argv)
     {
         pair[0].distance = pair[1].distance = 0;
     }
-    test.expect(verify_matches(previous, current, tied, options, matches) == VisionStatus::success &&
-                    matches.ratio_passed == 0 && matches.inliers.empty() && !matches.geometry_valid,
+    test.expect(verify_matches(previous, current, tied, reverse, options, matches) == VisionStatus::success &&
+                    matches.descriptors.forward_ratio_passed == 0 && matches.inliers.empty() && !matches.geometry_valid,
                 "matching", "zero-distance ties rejected");
     neighbors.resize(7);
-    test.expect(verify_matches(previous, current, neighbors, options, matches) == VisionStatus::success &&
+    test.expect(verify_matches(previous, current, neighbors, reverse, options, matches) == VisionStatus::success &&
                     matches.inliers.empty() && !matches.geometry_valid,
                 "matching", "no all-inlier fallback below profile candidate minimum");
 
     OrbTrackingOptions invalid = options;
     invalid.camera.fx = 0;
-    test.expect(verify_matches(previous, current, neighbors, invalid, matches) == VisionStatus::invalid_input,
+    test.expect(verify_matches(previous, current, neighbors, reverse, invalid, matches) == VisionStatus::invalid_input,
                 "geometry", "invalid camera calibration rejected");
 
     OrbTracker tracker(options);
@@ -211,11 +253,12 @@ int main(int argc, char ** argv)
     diagnostics.features.descriptors.setTo(0);
     auto const saved_output = output;
     auto const saved_descriptor_data = diagnostics.features.descriptors.data;
-    diagnostics.matches.ratio_passed = 1234;
+    diagnostics.matches.descriptors.forward_ratio_passed = 1234;
     test.expect(tracker.process(identity, image, {}, output, &diagnostics) == VisionStatus::invalid_input &&
                     same_observations(output, saved_output) &&
                     diagnostics.features.descriptors.data == saved_descriptor_data &&
-                    cv::countNonZero(diagnostics.features.descriptors) == 0 && diagnostics.matches.ratio_passed == 1234,
+                    cv::countNonZero(diagnostics.features.descriptors) == 0 &&
+                    diagnostics.matches.descriptors.forward_ratio_passed == 1234,
                 "tracking", "duplicate image rejected atomically");
     cv::Mat shifted;
     cv::warpAffine(image, shifted, cv::Matx23d(1, 0, 3, 0, 1, 2), image.size());
@@ -261,13 +304,13 @@ int main(int argc, char ** argv)
     cuda_options.orb.execution = Execution::cuda;
     OrbTracker unavailable(cuda_options);
     auto const retained = output;
-    diagnostics.matches.ratio_passed = 5678;
+    diagnostics.matches.descriptors.forward_ratio_passed = 5678;
     test.expect(unavailable.process(identity, image, {}, output, &diagnostics) == VisionStatus::backend_unavailable &&
-                    same_observations(output, retained) && diagnostics.matches.ratio_passed == 5678,
+                    same_observations(output, retained) && diagnostics.matches.descriptors.forward_ratio_passed == 5678,
                 "interface", "unavailable backend preserves both outputs without fallback");
     identity.session_id = 0;
     test.expect(unavailable.process(identity, image, {}, output, &diagnostics) == VisionStatus::invalid_input &&
-                    same_observations(output, retained) && diagnostics.matches.ratio_passed == 5678,
+                    same_observations(output, retained) && diagnostics.matches.descriptors.forward_ratio_passed == 5678,
                 "interface", "tracker admission precedes extractor availability checks");
 #endif
     return test.failures() == 0 ? 0 : 1;

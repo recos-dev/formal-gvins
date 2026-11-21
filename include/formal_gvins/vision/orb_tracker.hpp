@@ -30,16 +30,31 @@ struct OrbTrackingOptions
     int ransac_iterations = 2000;
 };
 
+struct DescriptorMatches
+{
+    std::vector<cv::DMatch> matches; // Reciprocal, unique query/train pairs.
+    std::size_t forward_ratio_passed = 0, reverse_ratio_passed = 0;
+};
+
+/** Strict ratio in both directions plus mutual best. Ties and missing runners-up reject.
+ * Malformed/duplicate query entries fail atomically; input lists may omit empty queries.
+ */
+[[nodiscard]] VisionStatus reciprocal_matches(std::vector<std::vector<cv::DMatch>> const & forward,
+                                              std::vector<std::vector<cv::DMatch>> const & reverse,
+                                              std::size_t query_count, std::size_t train_count, float ratio,
+                                              DescriptorMatches & output);
+
 struct OrbMatchResult
 {
     std::vector<cv::DMatch> inliers; // query=previous, train=current
-    std::size_t ratio_passed = 0;
+    DescriptorMatches descriptors;
     bool geometry_valid = false;
 };
 
-/** Strict ratio, one-to-one selection, then calibrated five-point RANSAC; at least eight candidates. */
+/** Reciprocal descriptor association followed by calibrated geometry. */
 [[nodiscard]] VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & current,
                                           std::vector<std::vector<cv::DMatch>> const & neighbors,
+                                          std::vector<std::vector<cv::DMatch>> const & reverse,
                                           OrbTrackingOptions const & options, OrbMatchResult & output);
 
 /** Optional ORB data for inspection; keypoints/descriptors follow the observation order. */
