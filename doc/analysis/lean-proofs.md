@@ -74,8 +74,26 @@ premise, not inferred from diagonal or finiteness checks. Generic indexing,
 Cholesky and covariance lemmas adapt the same owner-authored foundation as group 1;
 active extents and pivoted Givens/consumer proofs are local additions.
 
+## Group 3: Joint state and clones
+
+Requirements: M-STATE and M-CLONE. Sources: `msckf/state.hpp` and `clones.hpp`.
+`Clones.lean` binds D=15+6N, the IMU order (p,v,theta,ba,bg), and clone (p,theta).
+
+| Statements | Exact claim and premises |
+|---|---|
+| `active_dimension_bound`, `cloneCoordinate_injective`, `poseIndex_entries` | Admitted clone capacity bounds the active dimension; clone coordinates do not overlap; copied IMU coordinates are exactly 0,1,2,6,7,8. |
+| `augmentIndex_old`, `augmentIndex_new`, `augment_old_block`, `augment_duplicate_row` | Augmentation retains the entire old covariance and duplicates pose rows/columns, including cross-covariance; it adds no independent noise. |
+| `removeIndex_injective`, `removeIndex_preserves_imu`, `removeIndex_skips_block`, `selection_covariance` | Removal selects retained coordinates on both axes; it is not a Schur complement. |
+| `augment_psd`, `remove_psd`, `augment_remove_last` | PSD preservation, including singular priors/duplicated variables, and append/remove-last covariance round trip. |
+| `canonicalUpper_of_symmetric`, `cloneSnapshot_fields` | Upper-triangle canonicalization is identity on exactly symmetric input; current and first-estimate snapshots are copied separately. |
+
+Exact PSD/symmetry are caller premises. Tolerance-admitted asymmetry, validation
+and rollback, machine-size arithmetic, identity/time admission and pending
+observation ownership are not established by these mathematical layout proofs.
+Snapshot field equations describe immutable values, not C++ object lifetime.
+
 ## Remaining sequence
 
-Groups 3–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
+Groups 4–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
 and will receive their own theorem/premise mappings as implemented. Groups 8–11
 remain backlog. No completion percentage is inferred from declaration counts.
