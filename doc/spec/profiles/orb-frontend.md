@@ -8,7 +8,7 @@
 
 ## Current implementation binding
 
-This profile describes [OrbOptions/OrbTracker](../../../include/formal_gvins/vision/tracker.hpp)
+This profile describes [OrbOptions/OrbTracker](../../../include/formal_gvins/vision/orb_tracker.hpp)
 and the [EuRoC frontend executable](../../../examples/euroc_frontend.cpp).
 OpenCV and contrib are pinned by their Git submodules; CMake requests exactly
 4.13.0. [CPU](../../../configs/opencv-cpu.cmake) and

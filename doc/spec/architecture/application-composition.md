@@ -56,13 +56,21 @@ current naming, that responsibility belongs to `OrbTracker`, which contains its
 matches; it does not discharge the tracking contract. The pipeline does not take
 a second extractor or duplicate the tracker's association logic.
 
+FeatureTracker names the common `process`/`reset` contract in V-EXECUTION, not a
+base class. `OrbTracker` is its first concrete implementation. The shared
+`TrackedImage` contains only identity, pixel domain and observations; optional
+`OrbTrackingDiagnostics` serves ORB inspection/benchmarks. Future descriptor or
+optical-flow trackers implement the same observation contract with their own
+options and state. A consumer does not need an extractor API or descriptors.
+
 | Responsibility | Placement |
 |---|---|
 | Application entry and deployment wiring | Application/example `.cpp`, selecting and constructing library components. |
 | Reusable typed VINS orchestration | Proposed `include/formal_gvins/vins.hpp`, with declarations followed by necessary template definitions. It belongs to host composition, not the image-independent numerical core. |
 | ORB extraction, localization and descriptor operations | Existing `include/formal_gvins/vision/orb.hpp` declares the component; `src/vision/orb.cpp` contains non-template implementations and private helpers. |
-| Matching, spatial selection, temporal/stereo tracking | Existing `include/formal_gvins/vision/tracker.hpp` and `src/vision/tracker.cpp`; extend the cohesive module before splitting private steps into separate files. |
-| Observation records | Existing `include/formal_gvins/vision/observation.hpp`; independent of image-library containers. |
+| ORB matching, spatial selection and tracking | `include/formal_gvins/vision/orb_tracker.hpp` and `src/vision/orb_tracker.cpp`; extend the cohesive module before splitting private steps into separate files. Stereo remains proposed. |
+| Shared tracker result/status | `include/formal_gvins/vision/tracker.hpp`; method-independent host batch, without OpenCV dependencies. |
+| Observation records | `include/formal_gvins/vision/observation.hpp`; numeric identities/coordinates for bounded consumers, independent of image-library and dynamic containers. |
 | Numerical state and lifecycle | `include/formal_gvins/msckf/`; state/math templates already exist. The complete filter runtime remains proposed. |
 | Projection, inverse camera and triangulation | Existing `include/formal_gvins/msckf/camera.hpp` and proposed `include/formal_gvins/msckf/triangulation.hpp`; backend/capacity-dependent mathematics remains in headers. |
 

@@ -6,7 +6,7 @@
  */
 
 #include <formal_gvins/dataset/euroc.hpp>
-#include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/orb_tracker.hpp>
 #include <chrono>
 #include <cmath>
 #include <fstream>
@@ -23,9 +23,16 @@ using Clock = std::chrono::steady_clock;
 using formal_gvins::dataset::EurocSequence;
 using formal_gvins::vision::Execution;
 using formal_gvins::vision::OrbTracker;
+using formal_gvins::vision::OrbTrackingDiagnostics;
+using formal_gvins::vision::OrbTrackingOptions;
 using formal_gvins::vision::TrackedImage;
-using formal_gvins::vision::TrackingOptions;
 using formal_gvins::vision::VisionStatus;
+
+struct Frame
+{
+    TrackedImage tracks;
+    OrbTrackingDiagnostics diagnostics;
+};
 
 struct Profile
 {
@@ -34,7 +41,7 @@ struct Profile
     int seed = 0;
     int dx = 0;
     int dy = 0;
-    TrackingOptions tracking;
+    OrbTrackingOptions tracking;
 };
 
 int integer(cv::FileNode const & node, char const * name)
@@ -99,10 +106,10 @@ double milliseconds(Clock::time_point start, Clock::time_point finish)
 }
 
 void process(OrbTracker & tracker, cv::Mat const & image, cv::Mat const & mask, std::uint64_t image_id,
-             std::uint64_t time_ns, TrackedImage & output)
+             std::uint64_t time_ns, Frame & output)
 {
     formal_gvins::vision::ImageIdentity const identity{1, 0, image_id, time_ns, 1, 1};
-    VisionStatus const status = tracker.process(identity, image, mask, output);
+    VisionStatus const status = tracker.process(identity, image, mask, output.tracks, &output.diagnostics);
     if (status != VisionStatus::success)
     {
         throw std::runtime_error("ORB process failed, status=" + std::to_string(static_cast<int>(status)));
@@ -110,11 +117,11 @@ void process(OrbTracker & tracker, cv::Mat const & image, cv::Mat const & mask, 
 }
 
 void snapshot(std::filesystem::path const & path, cv::Mat const & previous, cv::Mat const & current,
-              TrackedImage const & before, TrackedImage const & after)
+              Frame const & before, Frame const & after)
 {
     cv::Mat image;
-    cv::drawMatches(previous, before.features.keypoints, current, after.features.keypoints, after.matches.inliers,
-                    image, cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255), {},
+    cv::drawMatches(previous, before.diagnostics.features.keypoints, current, after.diagnostics.features.keypoints,
+                    after.diagnostics.matches.inliers, image, cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255), {},
                     cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
     if (!cv::imwrite(path.string(), image))
     {
@@ -122,7 +129,7 @@ void snapshot(std::filesystem::path const & path, cv::Mat const & previous, cv::
     }
 }
 
-void write_options(cv::FileStorage & output, TrackingOptions const & options)
+void write_options(cv::FileStorage & output, OrbTrackingOptions const & options)
 {
     output << "options"
            << "{"
@@ -176,19 +183,19 @@ void write_failure(cv::FileStorage & output, std::size_t index, std::uint64_t ti
            << "error" << error << "}";
 }
 
-void write_temporal(cv::FileStorage & output, TrackedImage const & tracked, double read_ms, double frontend_ms)
+void write_temporal(cv::FileStorage & output, Frame const & tracked, double read_ms, double frontend_ms)
 {
     output << "{"
-           << "frame_index" << static_cast<int>(tracked.identity.image_id - 1) << "time_ns"
-           << std::to_string(tracked.identity.time_ns) << "status"
+           << "frame_index" << static_cast<int>(tracked.tracks.identity.image_id - 1) << "time_ns"
+           << std::to_string(tracked.tracks.identity.time_ns) << "status"
            << "success"
-           << "features" << static_cast<int>(tracked.features.keypoints.size()) << "ratio_passed"
-           << static_cast<int>(tracked.matches.ratio_passed) << "inliers"
-           << static_cast<int>(tracked.matches.inliers.size()) << "geometry_valid"
-           << static_cast<int>(tracked.matches.geometry_valid) << "read_remap_ms" << read_ms << "frontend_ms"
-           << frontend_ms << "observations"
+           << "features" << static_cast<int>(tracked.diagnostics.features.keypoints.size()) << "ratio_passed"
+           << static_cast<int>(tracked.diagnostics.matches.ratio_passed) << "inliers"
+           << static_cast<int>(tracked.diagnostics.matches.inliers.size()) << "geometry_valid"
+           << static_cast<int>(tracked.diagnostics.matches.geometry_valid) << "read_remap_ms" << read_ms
+           << "frontend_ms" << frontend_ms << "observations"
            << "[";
-    for (auto const & observation : tracked.observations)
+    for (auto const & observation : tracked.tracks.observations)
     {
         output << "[:" << observation.u << observation.v << std::to_string(observation.track_id) << "]";
     }
@@ -196,11 +203,11 @@ void write_temporal(cv::FileStorage & output, TrackedImage const & tracked, doub
            << "}";
 }
 
-void write_points(cv::FileStorage & output, char const * name, TrackedImage const & tracked,
-                  cv::Mat const & opposite_mask, cv::Point2f offset)
+void write_points(cv::FileStorage & output, char const * name, Frame const & tracked, cv::Mat const & opposite_mask,
+                  cv::Point2f offset)
 {
     output << name << "[";
-    for (auto const & key : tracked.features.keypoints)
+    for (auto const & key : tracked.diagnostics.features.keypoints)
     {
         auto const point = key.pt + offset;
         bool const visible = std::isfinite(point.x) && std::isfinite(point.y) && point.x >= 0 && point.y >= 0 &&
@@ -211,20 +218,20 @@ void write_points(cv::FileStorage & output, char const * name, TrackedImage cons
     output << "]";
 }
 
-void write_translation(cv::FileStorage & output, std::size_t index, TrackedImage const & before,
-                       TrackedImage const & after, cv::Mat const & mask, cv::Mat const & shifted_mask,
-                       cv::Point2f offset, double frontend_ms)
+void write_translation(cv::FileStorage & output, std::size_t index, Frame const & before, Frame const & after,
+                       cv::Mat const & mask, cv::Mat const & shifted_mask, cv::Point2f offset, double frontend_ms)
 {
     output << "{"
-           << "frame_index" << static_cast<int>(index) << "time_ns" << std::to_string(before.identity.time_ns)
+           << "frame_index" << static_cast<int>(index) << "time_ns" << std::to_string(before.tracks.identity.time_ns)
            << "status"
            << "success"
-           << "frontend_ms" << frontend_ms << "geometry_valid" << static_cast<int>(after.matches.geometry_valid);
+           << "frontend_ms" << frontend_ms << "geometry_valid"
+           << static_cast<int>(after.diagnostics.matches.geometry_valid);
     write_points(output, "source", before, shifted_mask, offset);
     write_points(output, "target", after, mask, -offset);
     output << "matches"
            << "[";
-    for (auto const & match : after.matches.inliers)
+    for (auto const & match : after.diagnostics.matches.inliers)
     {
         output << "[:" << match.queryIdx << match.trainIdx << "]";
     }
@@ -236,14 +243,14 @@ int run_temporal(EurocSequence const & sequence, Profile const & profile, cv::Fi
                  std::filesystem::path const & directory)
 {
     OrbTracker tracker(profile.tracking);
-    TrackedImage previous;
+    Frame previous;
     cv::Mat previous_image;
     int failures = 0;
     for (std::size_t index = profile.first; index < profile.first + profile.count; ++index)
     {
         auto const time_ns = sequence.images(0)[index].time_ns;
         cv::Mat image;
-        TrackedImage current;
+        Frame current;
         double read_ms = 0, frontend_ms = 0;
         try
         {
@@ -295,7 +302,7 @@ int run_translation(EurocSequence const & sequence, Profile const & profile, cv:
     {
         auto const time_ns = sequence.images(0)[index].time_ns;
         cv::Mat image, shifted;
-        TrackedImage before, after;
+        Frame before, after;
         double frontend_ms = 0;
         try
         {

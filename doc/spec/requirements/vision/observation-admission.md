@@ -41,11 +41,31 @@ Changing calibration shall not reinterpret retained records silently. Frontend
 frame rejection can prevent duplicates at that interface, but does not replace
 the observation store's conflict checks for records received from other callers.
 
+### Tracker publication
+
+Each successful tracker result shall publish the complete active observation set
+for one identified camera image. Relative to the preceding successful result,
+retained IDs denote continuations, new IDs denote newly admitted tracks, and
+absent IDs retire that camera's temporal continuation. A failed frame shall not
+retire tracks. An empty successful frame retires all prior continuations; reset
+does likewise without recycling IDs. Callers shall propagate reset to their
+history owner and shall not infer retirement from a frame they did not receive.
+This does not delete stored observations or authorize their reuse in the filter.
+
+The batch shall explicitly identify raw or undistorted pixel coordinates under
+the calibration binding. An unspecified domain is not an admitted measurement.
+Consumers shall not infer the domain from the tracker method or change it merely
+by relabeling coordinates. The current ORB path emits undistorted pixels; the
+raw-image migration remains a separate implementation change. Derived normalized
+bearings are not additional pixel observations.
+
 ## Acceptance and verification
 
 Exercise duplicate/conflicting records, session/generation rollover, cross-camera
 IDs, invalid bindings and caller-buffer reuse. Check identity continuity and
 admission atomicity separately from correctness of physical feature association.
+Check complete-set lifecycle across success, failure, empty frames and reset, and
+verify that coordinate-domain metadata agrees with the actual processing path.
 The current ImageIdentity/FeatureObservation and tracker implement only the
 frontend portion; store-level evidence is required before accepting the whole
 contract.

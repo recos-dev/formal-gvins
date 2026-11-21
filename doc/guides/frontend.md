@@ -71,6 +71,25 @@ still propagate in this host layer. Core builds retain their no-exception profil
 
 ## EuRoC frontend replay
 
+### Tracker API
+
+Include `formal_gvins/vision/orb_tracker.hpp` to construct `OrbTracker` with
+`OrbTrackingOptions`. Call `process(identity, image, mask, tracked)` for the common
+`TrackedImage` result, and `reset()` before changing stream bindings. The result
+contains image identity, an explicit pixel domain and owning observations; it
+does not contain ORB descriptors or OpenCV matching containers. The current path
+still expects undistorted images and publishes `PixelDomain::undistorted`.
+
+For ORB inspection, supply an optional fifth argument pointing to
+`OrbTrackingDiagnostics`. Its keypoints/descriptors follow the observation order;
+match indices refer to the preceding successful image and the current image.
+Diagnostics own their data independently of tracker history. Returned failures
+preserve both outputs. Without diagnostics, callers need only the shared result
+and the `process`/`reset` operations; another tracking method may supply those
+operations without descriptors. See [V-EXECUTION](../spec/requirements/vision/frontend-execution.md#tracker-interface).
+
+### Replay command
+
 Download and extract an ASL/CSV sequence using the [dataset guide](datasets.md).
 Pass its `mav0` directory, not a ROS bag. The first profile uses cam0 monocular
 images, fixed pinhole/radial-tangential calibration and undistorted pixels with

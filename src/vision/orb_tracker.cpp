@@ -5,7 +5,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/orb_tracker.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -18,7 +18,7 @@ namespace formal_gvins::vision
 namespace
 {
 
-bool valid(TrackingOptions const & options)
+bool valid(OrbTrackingOptions const & options)
 {
     auto const & K = options.camera_matrix;
     for (double value : K.val)
@@ -39,7 +39,7 @@ bool valid(TrackingOptions const & options)
 }
 
 OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat const & mask,
-                              TrackingOptions const & options)
+                              OrbTrackingOptions const & options)
 {
     std::vector<std::size_t> order(input.keypoints.size());
     std::iota(order.begin(), order.end(), 0);
@@ -81,14 +81,14 @@ OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat 
 } /* end anonymous namespace */
 
 VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & current,
-                            std::vector<std::vector<cv::DMatch>> const & neighbors, TrackingOptions const & options,
-                            MatchResult & output)
+                            std::vector<std::vector<cv::DMatch>> const & neighbors, OrbTrackingOptions const & options,
+                            OrbMatchResult & output)
 {
     if (!valid(options))
     {
         return VisionStatus::invalid_input;
     }
-    MatchResult candidate;
+    OrbMatchResult candidate;
     std::vector<cv::DMatch> proposals;
     for (auto const & pair : neighbors)
     {
@@ -183,13 +183,13 @@ VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & cu
     }
 }
 
-OrbTracker::OrbTracker(TrackingOptions const & options)
+OrbTracker::OrbTracker(OrbTrackingOptions const & options)
     : m_options(options), m_extractor(options.orb), m_valid(valid(options))
 {
 }
 
 VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const & image, cv::Mat const & mask,
-                                 TrackedImage & output)
+                                 TrackedImage & output, OrbTrackingDiagnostics * diagnostics)
 {
     if (!m_valid || identity.session_id == 0 || identity.calibration_id == 0 || identity.noise_model_id == 0 ||
         (m_have_previous &&
@@ -210,22 +210,24 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
     {
         TrackedImage candidate;
         candidate.identity = identity;
-        candidate.features = spatial_selection(detected, image.size(), mask, m_options);
-        candidate.observations.resize(candidate.features.keypoints.size());
+        candidate.pixel_domain = PixelDomain::undistorted;
+        OrbTrackingDiagnostics details;
+        details.features = spatial_selection(detected, image.size(), mask, m_options);
+        candidate.observations.resize(details.features.keypoints.size());
         if (m_have_previous)
         {
             std::vector<std::vector<cv::DMatch>> neighbors;
-            status = m_extractor.match(m_previous, candidate.features, neighbors);
+            status = m_extractor.match(m_previous, details.features, neighbors);
             if (status != VisionStatus::success)
             {
                 return status;
             }
-            status = verify_matches(m_previous, candidate.features, neighbors, m_options, candidate.matches);
+            status = verify_matches(m_previous, details.features, neighbors, m_options, details.matches);
             if (status != VisionStatus::success)
             {
                 return status;
             }
-            for (auto const & match : candidate.matches.inliers)
+            for (auto const & match : details.matches.inliers)
             {
                 candidate.observations[static_cast<std::size_t>(match.trainIdx)].track_id =
                     m_observations[static_cast<std::size_t>(match.queryIdx)].track_id;
@@ -243,12 +245,20 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
                 }
                 observation.track_id = next_id++;
             }
-            observation.u = candidate.features.keypoints[index].pt.x;
-            observation.v = candidate.features.keypoints[index].pt.y;
+            observation.u = details.features.keypoints[index].pt.x;
+            observation.v = details.features.keypoints[index].pt.y;
         }
         // Complete allocations before committing history. Caller-owned results
         // cannot mutate descriptors retained for the next temporal match.
-        OrbFeatures history{candidate.features.keypoints, candidate.features.descriptors.clone()};
+        OrbFeatures history;
+        if (diagnostics != nullptr)
+        {
+            history = {details.features.keypoints, details.features.descriptors.clone()};
+        }
+        else
+        {
+            history = std::move(details.features);
+        }
         auto observations = candidate.observations;
         m_previous = std::move(history);
         m_observations = std::move(observations);
@@ -257,6 +267,10 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         m_next_track_id = next_id;
         m_have_previous = true;
         output = std::move(candidate);
+        if (diagnostics != nullptr)
+        {
+            *diagnostics = std::move(details);
+        }
         return VisionStatus::success;
     }
     catch (cv::Exception const &)

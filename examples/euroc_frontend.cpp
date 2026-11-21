@@ -6,7 +6,7 @@
  */
 
 #include <formal_gvins/dataset/euroc.hpp>
-#include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/orb_tracker.hpp>
 #include <algorithm>
 #include <charconv>
 #include <chrono>
@@ -50,7 +50,7 @@ int main(int argc, char ** argv)
     }
     try
     {
-        TrackingOptions options;
+        OrbTrackingOptions options;
         std::size_t frame_limit = std::numeric_limits<std::size_t>::max();
         std::filesystem::path output_directory;
         for (int i = 2; i < argc; ++i)
@@ -110,7 +110,7 @@ int main(int argc, char ** argv)
                 << cv::getBuildInformation();
         cv::setNumThreads(1);
         OrbTracker tracker(options);
-        TrackedImage previous;
+        OrbTrackingDiagnostics previous;
         cv::Mat previous_image;
         std::vector<double> timings;
         std::size_t total_inliers = 0;
@@ -120,16 +120,19 @@ int main(int argc, char ** argv)
             cv::Mat const image = sequence.read_image(0, index);
             auto const loaded = Clock::now();
             TrackedImage tracked;
+            OrbTrackingDiagnostics diagnostics;
             ImageIdentity const identity{1, 0, index + 1, images[index].time_ns, 1, 1};
-            if (tracker.process(identity, image, sequence.camera(0).valid_mask, tracked) != VisionStatus::success)
+            if (tracker.process(identity, image, sequence.camera(0).valid_mask, tracked, &diagnostics) !=
+                VisionStatus::success)
             {
                 throw std::runtime_error("Frontend failed at image " + std::to_string(index));
             }
             auto const processed = Clock::now();
             double const elapsed = milliseconds(loaded, processed);
             metrics << index + 1 << ',' << identity.time_ns << ',' << tracked.observations.size() << ','
-                    << tracked.matches.ratio_passed << ',' << tracked.matches.inliers.size() << ','
-                    << tracked.matches.geometry_valid << ',' << milliseconds(start, loaded) << ',' << elapsed << '\n';
+                    << diagnostics.matches.ratio_passed << ',' << diagnostics.matches.inliers.size() << ','
+                    << diagnostics.matches.geometry_valid << ',' << milliseconds(start, loaded) << ',' << elapsed
+                    << '\n';
             for (auto const & observation : tracked.observations)
             {
                 observations << index + 1 << ',' << identity.time_ns << ',' << observation.track_id << ','
@@ -139,20 +142,20 @@ int main(int argc, char ** argv)
             {
                 timings.push_back(elapsed);
             }
-            total_inliers += tracked.matches.inliers.size();
+            total_inliers += diagnostics.matches.inliers.size();
             if (index > 0 && (index % 100 == 0 || index + 1 == frame_limit))
             {
                 cv::Mat visualization;
-                cv::drawMatches(previous_image, previous.features.keypoints, image, tracked.features.keypoints,
-                                tracked.matches.inliers, visualization, cv::Scalar(0, 255, 0), cv::Scalar(0, 0, 255),
-                                {}, cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+                cv::drawMatches(previous_image, previous.features.keypoints, image, diagnostics.features.keypoints,
+                                diagnostics.matches.inliers, visualization, cv::Scalar(0, 255, 0),
+                                cv::Scalar(0, 0, 255), {}, cv::DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
                 if (!cv::imwrite((output_directory / ("tracks-" + std::to_string(index + 1) + ".png")).string(),
                                  visualization))
                 {
                     throw std::runtime_error("Cannot write visualization");
                 }
             }
-            previous = std::move(tracked);
+            previous = std::move(diagnostics);
             previous_image = image;
             if ((index + 1) % 100 == 0 || index + 1 == frame_limit)
             {

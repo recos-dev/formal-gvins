@@ -22,7 +22,14 @@ struct ImageIdentity
     std::uint64_t noise_model_id = 0;
 };
 
-/** Undistorted pinhole pixels, interpreted using the enclosing image's bindings. */
+enum class PixelDomain
+{
+    unspecified,
+    raw,
+    undistorted,
+};
+
+/** Pixel coordinates, interpreted using the enclosing batch's domain and image bindings. */
 struct FeatureObservation
 {
     std::uint64_t track_id = 0;

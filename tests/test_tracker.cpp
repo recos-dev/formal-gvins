@@ -5,10 +5,91 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/orb_tracker.hpp>
 #include "test_support.hpp"
+#include <algorithm>
 #include <set>
 #include <opencv2/imgproc.hpp>
+
+namespace
+{
+using formal_gvins::vision::FeatureObservation;
+using formal_gvins::vision::ImageIdentity;
+using formal_gvins::vision::OrbTracker;
+using formal_gvins::vision::OrbTrackingDiagnostics;
+using formal_gvins::vision::OrbTrackingOptions;
+using formal_gvins::vision::PixelDomain;
+using formal_gvins::vision::TrackedImage;
+using formal_gvins::vision::VisionStatus;
+
+bool same_observations(TrackedImage const & a, TrackedImage const & b)
+{
+    auto const & x = a.identity;
+    auto const & y = b.identity;
+    return x.session_id == y.session_id && x.camera_id == y.camera_id && x.image_id == y.image_id &&
+           x.time_ns == y.time_ns && x.calibration_id == y.calibration_id && x.noise_model_id == y.noise_model_id &&
+           a.pixel_domain == b.pixel_domain &&
+           std::equal(a.observations.begin(), a.observations.end(), b.observations.begin(), b.observations.end(),
+                      [](FeatureObservation const & p, FeatureObservation const & q)
+                      { return p.track_id == q.track_id && p.u == q.u && p.v == q.v; });
+}
+
+void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOptions const & options,
+                               cv::Mat const & image)
+{
+    // Seed each invocation to compare the same RANSAC execution on both paths.
+    OrbTracker plain(options), inspected(options);
+    TrackedImage output, reference;
+    OrbTrackingDiagnostics diagnostics;
+    ImageIdentity identity{4, 2, 1, 1000000000, 7, 9};
+    cv::Mat shifted;
+    cv::warpAffine(image, shifted, cv::Matx23d(1, 0, 3, 0, 1, 2), image.size());
+    auto compare = [&](cv::Mat const & frame, VisionStatus expected)
+    {
+        auto const saved = output;
+        cv::setRNGSeed(71);
+        auto const status = plain.process(identity, frame, {}, output);
+        cv::setRNGSeed(71);
+        auto const inspected_status = inspected.process(identity, frame, {}, reference, &diagnostics);
+        test.expect(status == expected && inspected_status == expected, "interface", "matching operation status");
+        test.expect(same_observations(output, reference), "interface", "diagnostics do not change observations or IDs");
+        if (status != VisionStatus::success)
+        {
+            test.expect(same_observations(output, saved), "interface", "failure preserves the complete batch");
+        }
+    };
+    compare(image, VisionStatus::success);
+    test.expect(output.pixel_domain == PixelDomain::undistorted && !output.observations.empty(), "interface",
+                "successful output declares the actual coordinate domain");
+    auto const first = output;
+    compare(image, VisionStatus::invalid_input); // Duplicate frame.
+    ++identity.image_id;
+    identity.time_ns += 50000000;
+    compare({}, VisionStatus::invalid_input);
+    compare(shifted, VisionStatus::success);
+    // Mutating an owning common output must not change private tracking history.
+    output.observations.clear();
+    ++identity.image_id;
+    identity.time_ns += 50000000;
+    compare(image, VisionStatus::success);
+    ++identity.image_id;
+    identity.time_ns += 50000000;
+    compare(cv::Mat::zeros(image.size(), CV_8UC1), VisionStatus::success);
+    test.expect(output.observations.empty(), "interface", "successful empty frame retires all continuations");
+    plain.reset();
+    inspected.reset();
+    ++identity.calibration_id;
+    ++identity.image_id;
+    identity.time_ns += 50000000;
+    compare(image, VisionStatus::success);
+    for (auto const & observation : output.observations)
+    {
+        test.expect(std::none_of(first.observations.begin(), first.observations.end(),
+                                 [&](FeatureObservation const & old) { return old.track_id == observation.track_id; }),
+                    "interface", "reset changes bindings without reusing IDs");
+    }
+}
+} /* end anonymous namespace */
 
 int main(int argc, char ** argv)
 {
@@ -16,7 +97,7 @@ int main(int argc, char ** argv)
     formal_gvins::test::Context test;
     cv::setNumThreads(1);
     cv::RNG random(71);
-    TrackingOptions options;
+    OrbTrackingOptions options;
     options.camera_matrix = {300, 0, 300, 0, 300, 200, 0, 0, 1};
     options.orb.execution = argc == 2 && std::string_view(argv[1]) == "--cuda" ? Execution::cuda : Execution::cpu;
 
@@ -37,8 +118,8 @@ int main(int argc, char ** argv)
         current.keypoints.emplace_back(p, 1);
         neighbors.push_back({cv::DMatch(i, i, 10), cv::DMatch(i, (i + 1) % 80, 100)});
     }
-    MatchResult matches;
-    TrackingOptions geometry_options = options;
+    OrbMatchResult matches;
+    OrbTrackingOptions geometry_options = options;
     geometry_options.epipolar_threshold_px = 0.1;
     test.expect(verify_matches(previous, current, neighbors, geometry_options, matches) == VisionStatus::success &&
                     matches.geometry_valid,
@@ -85,7 +166,7 @@ int main(int argc, char ** argv)
                     matches.inliers.empty() && !matches.geometry_valid,
                 "matching", "no all-inlier fallback below profile candidate minimum");
 
-    TrackingOptions invalid = options;
+    OrbTrackingOptions invalid = options;
     invalid.camera_matrix(0, 0) = 0;
     test.expect(verify_matches(previous, current, neighbors, invalid, matches) == VisionStatus::invalid_input,
                 "geometry", "invalid camera calibration rejected");
@@ -95,7 +176,9 @@ int main(int argc, char ** argv)
     random.fill(image, cv::RNG::UNIFORM, 0, 256);
     ImageIdentity identity{1, 0, 1, 1000000000, 1, 1};
     TrackedImage output;
-    test.expect(tracker.process(identity, image, {}, output) == VisionStatus::success, "tracking", "initial frame");
+    OrbTrackingDiagnostics diagnostics;
+    test.expect(tracker.process(identity, image, {}, output, &diagnostics) == VisionStatus::success, "tracking",
+                "initial frame");
     test.expect(!output.observations.empty() && output.observations.size() <= 400U, "tracking", "feature budget");
     std::vector<int> occupancy(48, 0);
     std::set<std::uint64_t> ids;
@@ -111,42 +194,78 @@ int main(int argc, char ** argv)
         test.expect(occupancy[cell] <= 400 / 48 + (cell < 400 % 48 ? 1 : 0), "tracking", "spatial quota");
     }
     test.expect(ids.size() == output.observations.size(), "tracking", "unique IDs");
+    test.expect(output.pixel_domain == PixelDomain::undistorted &&
+                    output.observations.size() == diagnostics.features.keypoints.size() &&
+                    diagnostics.features.descriptors.rows == static_cast<int>(output.observations.size()),
+                "interface", "domain and diagnostic pairing");
+    for (std::size_t i = 0; i < output.observations.size(); ++i)
+    {
+        auto const & pixel = diagnostics.features.keypoints[i].pt;
+        test.expect(output.observations[i].u == pixel.x && output.observations[i].v == pixel.y, "interface",
+                    "diagnostic keypoints retain observation order");
+    }
     auto const first_ids = ids;
-    output.features.descriptors.setTo(0);
-    test.expect(tracker.process(identity, image, {}, output) == VisionStatus::invalid_input &&
-                    output.identity.image_id == 1,
+    diagnostics.features.descriptors.setTo(0);
+    auto const saved_output = output;
+    auto const saved_descriptor_data = diagnostics.features.descriptors.data;
+    diagnostics.matches.ratio_passed = 1234;
+    test.expect(tracker.process(identity, image, {}, output, &diagnostics) == VisionStatus::invalid_input &&
+                    same_observations(output, saved_output) &&
+                    diagnostics.features.descriptors.data == saved_descriptor_data &&
+                    cv::countNonZero(diagnostics.features.descriptors) == 0 && diagnostics.matches.ratio_passed == 1234,
                 "tracking", "duplicate image rejected atomically");
     cv::Mat shifted;
     cv::warpAffine(image, shifted, cv::Matx23d(1, 0, 3, 0, 1, 2), image.size());
     ++identity.image_id;
     identity.time_ns += 50000000;
-    test.expect(tracker.process(identity, shifted, {}, output) == VisionStatus::success, "tracking", "next frame");
-    test.expect(output.matches.geometry_valid && output.matches.inliers.size() > 30U, "tracking",
+    test.expect(tracker.process(identity, shifted, {}, output, &diagnostics) == VisionStatus::success, "tracking",
+                "next frame");
+    test.expect(diagnostics.matches.geometry_valid && diagnostics.matches.inliers.size() > 30U, "tracking",
                 "temporal continuations survive caller mutation of published descriptors");
     std::size_t continued = 0;
     for (auto const & observation : output.observations)
     {
         continued += first_ids.count(observation.track_id);
     }
-    test.expect(continued == output.matches.inliers.size(), "tracking", "only verified matches inherit IDs");
+    test.expect(continued == diagnostics.matches.inliers.size(), "tracking", "only verified matches inherit IDs");
     auto const last_id = output.identity.image_id;
     ++identity.calibration_id;
-    test.expect(tracker.process(identity, shifted, {}, output) == VisionStatus::invalid_input &&
+    test.expect(tracker.process(identity, shifted, {}, output, &diagnostics) == VisionStatus::invalid_input &&
                     output.identity.image_id == last_id,
                 "tracking", "calibration change requires reset");
     --identity.calibration_id;
     ++identity.image_id;
     identity.time_ns += 50000000;
-    test.expect(tracker.process(identity, cv::Mat::zeros(image.size(), CV_8UC1), {}, output) == VisionStatus::success &&
+    test.expect(tracker.process(identity, cv::Mat::zeros(image.size(), CV_8UC1), {}, output, &diagnostics) ==
+                        VisionStatus::success &&
                     output.observations.empty(),
                 "tracking", "empty frame retires history");
     tracker.reset();
     ++identity.image_id;
     identity.time_ns += 50000000;
-    test.expect(tracker.process(identity, image, {}, output) == VisionStatus::success, "tracking", "restart");
+    test.expect(tracker.process(identity, image, {}, output, &diagnostics) == VisionStatus::success, "tracking",
+                "restart");
     for (auto const & observation : output.observations)
     {
         test.expect(first_ids.count(observation.track_id) == 0, "tracking", "reset does not reuse IDs");
     }
+    if (options.orb.execution == Execution::cpu)
+    {
+        test_optional_diagnostics(test, options, image);
+    }
+#if !defined(FORMAL_GVINS_FRONTEND_CUDA)
+    auto cuda_options = options;
+    cuda_options.orb.execution = Execution::cuda;
+    OrbTracker unavailable(cuda_options);
+    auto const retained = output;
+    diagnostics.matches.ratio_passed = 5678;
+    test.expect(unavailable.process(identity, image, {}, output, &diagnostics) == VisionStatus::backend_unavailable &&
+                    same_observations(output, retained) && diagnostics.matches.ratio_passed == 5678,
+                "interface", "unavailable backend preserves both outputs without fallback");
+    identity.session_id = 0;
+    test.expect(unavailable.process(identity, image, {}, output, &diagnostics) == VisionStatus::invalid_input &&
+                    same_observations(output, retained) && diagnostics.matches.ratio_passed == 5678,
+                "interface", "tracker admission precedes extractor availability checks");
+#endif
     return test.failures() == 0 ? 0 : 1;
 }

@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <formal_gvins/vision/tracker.hpp>
 #include <vector>
 #include <opencv2/core.hpp>
 #include <opencv2/features2d.hpp>
@@ -16,20 +17,6 @@
 
 namespace formal_gvins::vision
 {
-
-enum class VisionStatus
-{
-    success,
-    invalid_input,
-    backend_unavailable,
-    backend_failure,
-};
-
-enum class Execution
-{
-    cpu,
-    cuda,
-};
 
 struct OrbOptions
 {
