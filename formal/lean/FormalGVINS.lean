@@ -16,3 +16,5 @@ import FormalGVINS.LinearAlgebra
 import FormalGVINS.Solve
 import FormalGVINS.QR
 import FormalGVINS.Clones
+import FormalGVINS.ImuPropagation
+import FormalGVINS.PropagationDifferential

@@ -92,8 +92,35 @@ and rollback, machine-size arithmetic, identity/time admission and pending
 observation ownership are not established by these mathematical layout proofs.
 Snapshot field equations describe immutable values, not C++ object lifetime.
 
+## Group 4: IMU inputs, mean and differential kernels
+
+Requirement: M-PROPAGATE. Sources: `msckf/imu.hpp`, `prediction.hpp`.
+The exact mean uses held **body** force/rate, with world-fixed gravity. It does
+not substitute a frozen world-acceleration model for nonzero body rotation.
+
+| Statements | Exact claim and premises |
+|---|---|
+| `ImuPropagation`: interpolation endpoints/range, `endpoint_average_affine`, `average_bias` | Bracket interpolation is convex; endpoint averaging is the midpoint value of the interpolant; current bias subtraction has the stated sign. |
+| `A2_weighted`, `A1_derivative`, `A2_derivative`, `velocity_derivative`, `position_derivative` | Continuous rotation integrals give p-dot=v and v-dot=R(t)a+g, with initial conditions from `mean_zero_time`; group 1 supplies the quaternion ODE. |
+| `A1_zero_rate`, `A2_zero_rate`, zero-rate mean, `constantRate_add`, `velocity_split`, `position_split` | Constant-acceleration limit and arbitrary-rate exact mean composition for identical held inputs, using the original velocity for position. |
+| `gammaTerm`, `gammaSum_zero`, `gamma_zero_matches_integrals` | Exact interpretation of the finite recurrence and agreement at zero angular rate; no equality to the infinite series away from zero is claimed. |
+| `PropagationDifferential`: `rotatedVector_derivative`, `gyroBias_kernel_derivative`, `rightAttitude_action_derivative`, `accelerometerBias_derivative` | Actual directional derivatives of rotated force fix the attitude/accelerometer-bias negative signs and gyro-bias positive B1/B2 integrands. Group 1's `conjugatedIncrement_hasDerivAt` supplies E-transpose attitude transport. |
+| `quadrature_gyroBias_derivative` | The finite weighted derivative sum is the derivative of the corresponding quadrature mean; this is not the derivative of the production truncated-Gamma mean. |
+| `integrated_gyroBias_derivative` | The continuous weighted integral derivative under explicit measurability, integrability and local integrable-Lipschitz domination hypotheses. These regularity hypotheses are visible in the theorem, not assumed derivative conclusions. |
+| `hat_rotated_mul_unit` | The frame identity relating ordinary `-R*hat(A*a)` to `-hat(R*A*a)*R` for a unit attitude. |
+
+The continuous-integral theorem is conditional on its analytic regularity
+hypotheses; it does not discharge a concrete uniform domination/error bound for
+the admitted implementation profile. The executable Gamma truncation and GL5
+quadrature are distinct approximations. Their discrepancy, concrete profile
+bounds, floating-point evaluation and
+a Fréchet derivative of the assembled executable transition are not claimed.
+The ordinary transition's exact differential kernels and the FEJ frame/block
+comparison are separate claims; group 7 owns the latter. Bias/clone immutability
+and atomic publication still require C++ evidence.
+
 ## Remaining sequence
 
-Groups 4–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
+Groups 5–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
 and will receive their own theorem/premise mappings as implemented. Groups 8–11
 remain backlog. No completion percentage is inferred from declaration counts.
