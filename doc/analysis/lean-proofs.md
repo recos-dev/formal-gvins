@@ -27,7 +27,9 @@ Sources: [unit quaternion](../../include/formal_gvins/so3/unit_quaternion.hpp),
 [operations](../../include/formal_gvins/so3/operations.hpp),
 [rotation vector](../../include/formal_gvins/so3/rotation_vector.hpp) and
 [right Jacobian](../../include/formal_gvins/so3/right_jacobian.hpp).
-The basis is scalar-first Hamilton multiplication, active body-to-world rotation
+Requirements: Q-IDENTITY, Q-MUL, Q-INVERSE, Q-NORMALIZE, Q-SIGN,
+Q-ROT-COMPOSE, Q-ROT-MATRIX, Q-ROTATE, SO3-HAT, SO3-EXP, SO3-LOG,
+SO3-SMALL-ANGLE and F-JR. The basis is scalar-first Hamilton multiplication, active body-to-world rotation
 and right-local perturbations. Quaternion coefficient formulas, rotation direction,
 Exp half angle, principal Log sign selection and Jacobian branches were compared
 with these local sources; importing the proofs alone would not establish that match.
@@ -47,8 +49,33 @@ These modules adapt the owner's formal-eskf foundation at revision
 licensing. INS translation/state/reset policies were not imported as MSCKF claims.
 Proof sources are under [formal/lean/FormalGVINS](../../formal/lean/FormalGVINS).
 
+## Group 2: Linear algebra
+
+Sources: `linalg/bounded.hpp`, `cholesky.hpp`, `qr.hpp`, `solve.hpp`.
+Requirements: F-LINALG, F-BOUNDED, F-CHOLESKY, F-TRIANGULAR, F-SOLVE,
+F-QR, F-LEAST-SQUARES, F-WHITEN and F-NULLSPACE.
+
+| Lean module / principal statements | Exact claim and premises |
+|---|---|
+| `LinearAlgebra`: row-major round trips, block extraction/replacement, `block_admission`, `inactive_storage_irrelevant`, `active_product_entries` | Valid active indices stay inside capacity; inactive coefficients do not enter products. Mathematical natural indices do not prove machine-size overflow behavior. |
+| `Solve`: `choleskyRecurrences_factor`, `cholesky_positive_pivot`, substitution equations | Symmetric input and successful nonzero-pivot recurrences reconstruct LLT and solve every RHS column. This is a loop-result contract; SPD-to-success, rounding and backend execution are not assumed proved. |
+| `Covariance`: `rightSolve_equation`, `rightSolve_unique`, `rightSolve_transposed_equation` | Unique right solve and transposition for SPD systems; C++ does not form an inverse. |
+| `QR`: `givens_scaled`, `givens_orthogonal`, `orthogonal_product`, `qr_row_invariant`, `pivot_invariant`, `permutation_solution` | Scaled coefficients, embedded row rotations and column permutations preserve QR/RHS relations. Inputs to a nontrivial rotation have positive scale and a nonzero pair. |
+| `QR`: `triangular_leastSquares_normal`, `qr_normal_equation`, `leastSquares_minimum` | Solved leading rows plus zero trailing system rows imply the normal equations and a global least-squares minimum. |
+| `QR`: `whiten_from_forward_substitution`, `trailing_rows_annihilate`, `trailing_rows_orthonormal`, `nullspace_eliminates`, `nullspace_noise` | Successful triangular whitening and the trailing orthonormal rows eliminate feature error while preserving unit noise covariance. |
+
+QR is column-pivoted **Givens**, as implemented locally. These statements prove
+exact transformations and their loop invariants/results, not the C++ control flow
+or an exact-rank guarantee from the tolerance test. A threshold stop retains the
+remaining matrix; only the full-column-rank consumers use the zero-trailing-row
+premise. Numerical rank, conditioning, overflow and non-finite/failure transactions
+require separate source/numerical evidence. Covariance PSD is a mathematical
+premise, not inferred from diagonal or finiteness checks. Generic indexing,
+Cholesky and covariance lemmas adapt the same owner-authored foundation as group 1;
+active extents and pivoted Givens/consumer proofs are local additions.
+
 ## Remaining sequence
 
-Groups 2–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
+Groups 3–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
 and will receive their own theorem/premise mappings as implemented. Groups 8–11
 remain backlog. No completion percentage is inferred from declaration counts.

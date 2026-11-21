@@ -12,3 +12,6 @@ import FormalGVINS.RightJacobian
 import FormalGVINS.RightJacobianLimits
 import FormalGVINS.QuaternionKinematics
 import FormalGVINS.RotationDifferential
+import FormalGVINS.LinearAlgebra
+import FormalGVINS.Solve
+import FormalGVINS.QR
