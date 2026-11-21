@@ -8,6 +8,7 @@
 #pragma once
 
 #include <formal_gvins/vision/orb.hpp>
+#include <formal_gvins/camera/radtan.hpp>
 #include <formal_gvins/vision/tracker.hpp>
 #include <cstddef>
 #include <vector>
@@ -18,12 +19,13 @@ namespace formal_gvins::vision
 struct OrbTrackingOptions
 {
     OrbOptions orb;
-    cv::Matx33d camera_matrix = cv::Matx33d::zeros(); // Required K for undistorted pixels, zero skew
+    camera::Radtan<double> camera;
+    camera::InverseDomain<double> inverse;
     int feature_capacity = 400;
     int grid_columns = 8;
     int grid_rows = 6;
     float ratio = 0.75F;
-    double epipolar_threshold_px = 1.5;
+    double epipolar_threshold = 0.003; // Normalized coordinates, not pixels.
     double confidence = 0.99;
     int ransac_iterations = 2000;
 };
@@ -48,7 +50,7 @@ struct OrbTrackingDiagnostics
 };
 
 /**
- * One camera stream, operating on undistorted CV_8UC1 images.
+ * One camera stream, operating on raw CV_8UC1 images.
  * Failed operations preserve tracks and output. Successful empty frames retire
  * previous tracks. Geometry failure creates new IDs, never false continuations.
  */

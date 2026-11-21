@@ -72,7 +72,7 @@ Profile read_profile(char const * path, Execution execution)
     }
     auto const node = file.root();
     int const first = integer(node, "first_frame"), count = integer(node, "frame_count");
-    if (static_cast<std::string>(node["protocol"]) != "euroc-orb-v2" || integer(node, "camera") != 0 || first < 0 ||
+    if (static_cast<std::string>(node["protocol"]) != "euroc-orb-v3" || integer(node, "camera") != 0 || first < 0 ||
         count < 2 || first > std::numeric_limits<int>::max() - count)
     {
         throw std::runtime_error("Unsupported benchmark profile");
@@ -94,7 +94,7 @@ Profile read_profile(char const * path, Execution execution)
     options.grid_columns = integer(tracking, "grid_columns");
     options.grid_rows = integer(tracking, "grid_rows");
     options.ratio = static_cast<float>(real(tracking, "ratio"));
-    options.epipolar_threshold_px = real(tracking, "epipolar_threshold_px");
+    options.epipolar_threshold = real(tracking, "epipolar_threshold");
     options.confidence = real(tracking, "confidence");
     options.ransac_iterations = integer(tracking, "ransac_iterations");
     return result;
@@ -136,7 +136,7 @@ void write_options(cv::FileStorage & output, OrbTrackingOptions const & options)
            << "feature_count" << options.orb.feature_count << "scale_factor" << options.orb.scale_factor
            << "pyramid_levels" << options.orb.pyramid_levels << "fast_threshold" << options.orb.fast_threshold
            << "feature_capacity" << options.feature_capacity << "grid_columns" << options.grid_columns << "grid_rows"
-           << options.grid_rows << "ratio" << options.ratio << "epipolar_threshold_px" << options.epipolar_threshold_px
+           << options.grid_rows << "ratio" << options.ratio << "epipolar_threshold" << options.epipolar_threshold
            << "confidence" << options.confidence << "ransac_iterations" << options.ransac_iterations << "}";
     // These are fixed properties of the production adapter, not benchmark switches.
     output << "adapter"
@@ -192,7 +192,7 @@ void write_temporal(cv::FileStorage & output, Frame const & tracked, double read
            << "features" << static_cast<int>(tracked.diagnostics.features.keypoints.size()) << "ratio_passed"
            << static_cast<int>(tracked.diagnostics.matches.ratio_passed) << "inliers"
            << static_cast<int>(tracked.diagnostics.matches.inliers.size()) << "geometry_valid"
-           << static_cast<int>(tracked.diagnostics.matches.geometry_valid) << "read_remap_ms" << read_ms
+           << static_cast<int>(tracked.diagnostics.matches.geometry_valid) << "read_image_ms" << read_ms
            << "frontend_ms" << frontend_ms << "observations"
            << "[";
     for (auto const & observation : tracked.tracks.observations)
@@ -337,7 +337,7 @@ void run(char const * input, Profile profile, std::filesystem::path const & dire
     {
         throw std::runtime_error("Requested frames exceed the dataset extent");
     }
-    profile.tracking.camera_matrix = sequence.camera(0).K;
+    profile.tracking.camera = sequence.camera(0).intrinsics;
     cv::setNumThreads(1);
     cv::setRNGSeed(profile.seed);
     std::filesystem::create_directories(directory);
@@ -355,7 +355,7 @@ void run(char const * input, Profile profile, std::filesystem::path const & dire
         throw std::runtime_error("Cannot write OpenCV build identity");
     }
     output << "protocol"
-           << "euroc-orb-v2"
+           << "euroc-orb-v3"
            << "workload" << workload << "execution"
            << (profile.tracking.orb.execution == Execution::cpu ? "cpu" : "cuda") << "opencv" << CV_VERSION
            << "compiler" << BENCHMARK_COMPILER << "build_type" << BENCHMARK_BUILD_TYPE << "width"

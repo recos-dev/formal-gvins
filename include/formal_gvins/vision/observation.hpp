@@ -35,6 +35,7 @@ struct FeatureObservation
     std::uint64_t track_id = 0;
     double u = 0;
     double v = 0;
+    double x = 0, y = 0; // Derived normalized ray [x,y,1]; same calibration, not another measurement.
 };
 
 } /* end namespace formal_gvins::vision */

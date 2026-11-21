@@ -68,3 +68,7 @@ points and bad calibration/domain bindings. Verify current/frozen evaluation
 and refinement's raw-pixel objective, without claiming global convergence.
 Numerical depth/parallax/conditioning, noise, inverse and iteration settings
 remain profile decisions before this module can be accepted.
+
+## Decomposition
+
+[M-UNPROJECT](camera-unprojection.md) owns the calibrated inverse used by frontend geometry.

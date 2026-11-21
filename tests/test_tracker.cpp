@@ -31,7 +31,7 @@ bool same_observations(TrackedImage const & a, TrackedImage const & b)
            a.pixel_domain == b.pixel_domain &&
            std::equal(a.observations.begin(), a.observations.end(), b.observations.begin(), b.observations.end(),
                       [](FeatureObservation const & p, FeatureObservation const & q)
-                      { return p.track_id == q.track_id && p.u == q.u && p.v == q.v; });
+                      { return p.track_id == q.track_id && p.u == q.u && p.v == q.v && p.x == q.x && p.y == q.y; });
 }
 
 void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOptions const & options,
@@ -59,7 +59,7 @@ void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOp
         }
     };
     compare(image, VisionStatus::success);
-    test.expect(output.pixel_domain == PixelDomain::undistorted && !output.observations.empty(), "interface",
+    test.expect(output.pixel_domain == PixelDomain::raw && !output.observations.empty(), "interface",
                 "successful output declares the actual coordinate domain");
     auto const first = output;
     compare(image, VisionStatus::invalid_input); // Duplicate frame.
@@ -98,7 +98,7 @@ int main(int argc, char ** argv)
     cv::setNumThreads(1);
     cv::RNG random(71);
     OrbTrackingOptions options;
-    options.camera_matrix = {300, 0, 300, 0, 300, 200, 0, 0, 1};
+    options.camera = {300, 300, 300, 200};
     options.orb.execution = argc == 2 && std::string_view(argv[1]) == "--cuda" ? Execution::cuda : Execution::cpu;
 
     OrbFeatures previous, current;
@@ -120,7 +120,7 @@ int main(int argc, char ** argv)
     }
     OrbMatchResult matches;
     OrbTrackingOptions geometry_options = options;
-    geometry_options.epipolar_threshold_px = 0.1;
+    geometry_options.epipolar_threshold = 0.1 / 300;
     test.expect(verify_matches(previous, current, neighbors, geometry_options, matches) == VisionStatus::success &&
                     matches.geometry_valid,
                 "geometry", "nonplanar calibrated scene");
@@ -167,7 +167,7 @@ int main(int argc, char ** argv)
                 "matching", "no all-inlier fallback below profile candidate minimum");
 
     OrbTrackingOptions invalid = options;
-    invalid.camera_matrix(0, 0) = 0;
+    invalid.camera.fx = 0;
     test.expect(verify_matches(previous, current, neighbors, invalid, matches) == VisionStatus::invalid_input,
                 "geometry", "invalid camera calibration rejected");
 
@@ -194,7 +194,7 @@ int main(int argc, char ** argv)
         test.expect(occupancy[cell] <= 400 / 48 + (cell < 400 % 48 ? 1 : 0), "tracking", "spatial quota");
     }
     test.expect(ids.size() == output.observations.size(), "tracking", "unique IDs");
-    test.expect(output.pixel_domain == PixelDomain::undistorted &&
+    test.expect(output.pixel_domain == PixelDomain::raw &&
                     output.observations.size() == diagnostics.features.keypoints.size() &&
                     diagnostics.features.descriptors.rows == static_cast<int>(output.observations.size()),
                 "interface", "domain and diagnostic pairing");

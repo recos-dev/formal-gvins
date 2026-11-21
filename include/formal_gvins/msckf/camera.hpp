@@ -8,16 +8,12 @@
 #pragma once
 
 #include <formal_gvins/msckf/state.hpp>
+#include <formal_gvins/camera/radtan.hpp>
 
 namespace formal_gvins::msckf
 {
 
-/** Zero-skew radial-tangential intrinsics, normalized-to-raw pixel map. */
-template <typename Scalar> struct Radtan
-{
-    Scalar fx = 0, fy = 0, cx = 0, cy = 0;
-    Scalar k1 = 0, k2 = 0, p1 = 0, p2 = 0;
-};
+using camera::Radtan;
 
 template <typename Scalar> struct CameraDomain
 {
@@ -93,24 +89,15 @@ project(linalg::Vector<Linalg, 3U> const & point, Radtan<typename Linalg::value_
     {
         return Status::domain_error;
     }
-    value_type const radial = value_type{1} + camera.k1 * rho + camera.k2 * rho * rho;
-    value_type const eta = camera.k1 + value_type{2} * camera.k2 * rho;
+    auto const d = camera::distort(camera, x, y);
     CameraProjection<Linalg> candidate;
-    candidate.pixel(0) =
-        camera.fx * (x * radial + value_type{2} * camera.p1 * x * y + camera.p2 * (rho + value_type{2} * x * x)) +
-        camera.cx;
-    candidate.pixel(1) =
-        camera.fy * (y * radial + camera.p1 * (rho + value_type{2} * y * y) + value_type{2} * camera.p2 * x * y) +
-        camera.cy;
+    candidate.pixel(0) = camera.fx * d.x + camera.cx;
+    candidate.pixel(1) = camera.fy * d.y + camera.cy;
     linalg::Matrix<Linalg, 2U, 2U> JD;
-    JD(0, 0) = camera.fx *
-               (radial + value_type{2} * x * x * eta + value_type{2} * camera.p1 * y + value_type{6} * camera.p2 * x);
-    JD(0, 1) =
-        camera.fx * (value_type{2} * x * y * eta + value_type{2} * camera.p1 * x + value_type{2} * camera.p2 * y);
-    JD(1, 0) =
-        camera.fy * (value_type{2} * x * y * eta + value_type{2} * camera.p1 * x + value_type{2} * camera.p2 * y);
-    JD(1, 1) = camera.fy *
-               (radial + value_type{2} * y * y * eta + value_type{6} * camera.p1 * y + value_type{2} * camera.p2 * x);
+    JD(0, 0) = camera.fx * d.j00;
+    JD(0, 1) = camera.fx * d.j01;
+    JD(1, 0) = camera.fy * d.j01;
+    JD(1, 1) = camera.fy * d.j11;
     linalg::Matrix<Linalg, 2U, 3U> Jn;
     Jn(0, 0) = value_type{1} / point(2);
     Jn(1, 1) = value_type{1} / point(2);

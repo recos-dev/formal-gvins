@@ -7,6 +7,7 @@
 
 #pragma once
 
+#include <formal_gvins/camera/radtan.hpp>
 #include <array>
 #include <cstdint>
 #include <filesystem>
@@ -42,10 +43,9 @@ struct GroundTruth
 struct CameraCalibration
 {
     cv::Size resolution;
-    cv::Matx33d K;
-    cv::Vec4d distortion; // radtan [k1,k2,p1,p2]
-    cv::Matx44d T_BC;     // Camera optical frame to calibrated IMU frame
-    cv::Mat map_x, map_y, valid_mask;
+    camera::Radtan<double> intrinsics;
+    cv::Matx44d T_BC;   // Camera optical frame to calibrated IMU frame
+    cv::Mat valid_mask; // Raw sensor pixel validity, 255 = admitted.
 };
 
 struct ImuCalibration
@@ -72,7 +72,7 @@ public:
     ImuCalibration const & imu_calibration() const { return m_imu_calibration; }
     std::vector<GroundTruth> const & ground_truth() const { return m_ground_truth; }
 
-    /** Undistorted grayscale pixels with unchanged K and optical axes. */
+    /** Raw grayscale pixels; no resampling or implicit coordinate conversion. */
     cv::Mat read_image(std::size_t camera_index, std::size_t image_index) const;
 
 private:

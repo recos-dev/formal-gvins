@@ -80,7 +80,7 @@ int main(int argc, char ** argv)
             output_directory = std::filesystem::path("output") / input.parent_path().filename() / execution;
         }
         auto const sequence = formal_gvins::dataset::EurocSequence::load(input);
-        options.camera_matrix = sequence.camera(0).K;
+        options.camera = sequence.camera(0).intrinsics;
         auto const & images = sequence.images(0);
         frame_limit = std::min(frame_limit, images.size());
         std::filesystem::create_directories(output_directory);
@@ -91,7 +91,7 @@ int main(int argc, char ** argv)
         {
             throw std::runtime_error("Cannot open output files");
         }
-        metrics << "image_id,time_ns,features,ratio_passed,inliers,geometry_valid,read_remap_ms,frontend_ms\n";
+        metrics << "image_id,time_ns,features,ratio_passed,inliers,geometry_valid,read_image_ms,frontend_ms\n";
         observations << "image_id,time_ns,track_id,u,v\n";
         observations << std::setprecision(12);
         profile << "Input: " << input << "\nExecution: " << execution << "\nCamera: cam0 (mono)\n"
@@ -100,10 +100,13 @@ int main(int argc, char ** argv)
                 << "; scale=" << options.orb.scale_factor << "; FAST=" << options.orb.fast_threshold
                 << "; WTA_K=2; Hamming\nSelection: " << options.feature_capacity << "; grid=" << options.grid_columns
                 << 'x' << options.grid_rows << "; ratio=" << options.ratio
-                << "; five-point essential RANSAC threshold=" << options.epipolar_threshold_px
-                << " px; confidence=" << options.confidence << "; max iterations=" << options.ransac_iterations << '\n'
-                << std::setprecision(17) << "K: " << sequence.camera(0).K
-                << "\nDistortion: " << sequence.camera(0).distortion << "\nT_BC: " << sequence.camera(0).T_BC << '\n'
+                << "; five-point essential RANSAC threshold=" << options.epipolar_threshold
+                << " normalized; confidence=" << options.confidence << "; max iterations=" << options.ransac_iterations
+                << '\n'
+                << std::setprecision(17) << "Intrinsics fx fy cx cy: " << options.camera.fx << ' ' << options.camera.fy
+                << ' ' << options.camera.cx << ' ' << options.camera.cy << "\nRadtan k1 k2 p1 p2: " << options.camera.k1
+                << ' ' << options.camera.k2 << ' ' << options.camera.p1 << ' ' << options.camera.p2
+                << "\nT_BC: " << sequence.camera(0).T_BC << '\n'
                 << "Frames: " << frame_limit << "; IMU samples: " << sequence.imu().size()
                 << "; ground-truth states: " << sequence.ground_truth().size() << '\n'
                 << "Frontend only; IMU and GT are read but not fused or scored. No trajectory estimate.\n"

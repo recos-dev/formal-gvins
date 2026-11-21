@@ -17,7 +17,7 @@ from feature_metrics import Match, Point, score_pair
 
 BENCHMARK_DIR = Path(__file__).resolve().parent
 REPO_DIR = BENCHMARK_DIR.parent.parent
-PROTOCOL = "euroc-orb-v2"
+PROTOCOL = "euroc-orb-v3"
 WORKLOADS = ("temporal", "translation")
 ADAPTER_PROFILE = {"wta_k": 2, "patch_size": 31, "edge_threshold": 31,
                    "score_type": "HARRIS", "descriptor_smoothing": "enabled"}
@@ -27,7 +27,7 @@ OUTPUT_FILES = (
 )
 CSV_FIELDS = (
     "workload", "frame_index", "time_ns", "status", "error", "features", "ratio_passed", "inliers",
-    "geometry_valid", "read_remap_ms", "frontend_ms", "source_points", "target_points",
+    "geometry_valid", "read_image_ms", "frontend_ms", "source_points", "target_points",
     "eligible_source_points", "eligible_target_points", "geometric_pairs", "accepted_pairs", "correct_pairs",
     "evaluated_pairs", "repeatability", "precision", "recall", "rmse_all_px", "rmse_correct_px",
 )
@@ -64,11 +64,11 @@ def load_profile(path):
     for name, (low, high) in integer_limits.items():
         if type(options[name]) is not int or not low <= options[name] <= high:
             raise ValueError(f"Invalid tracking option: {name}")
-    for name in ("scale_factor", "ratio", "epipolar_threshold_px", "confidence"):
+    for name in ("scale_factor", "ratio", "epipolar_threshold", "confidence"):
         if type(options[name]) not in (int, float) or not math.isfinite(options[name]):
             raise ValueError(f"Invalid tracking option: {name}")
     if (not 1 < options["scale_factor"] <= 2 or not 0 < options["ratio"] < 1
-            or not 0 < options["confidence"] < 1 or options["epipolar_threshold_px"] <= 0
+            or not 0 < options["confidence"] < 1 or options["epipolar_threshold"] <= 0
             or not options["grid_columns"] * options["grid_rows"] <= options["feature_capacity"] <= options["feature_count"]):
         raise ValueError("Invalid tracking option range or capacity")
     return profile
@@ -163,7 +163,7 @@ def temporal_metrics(frame, capacity):
                    or not track.isdecimal() or int(track) <= 0 for u, v, track in observations)
             or not 0 <= frame["inliers"] <= min(frame["features"], frame["ratio_passed"])):
         raise ValueError("Malformed native temporal observations")
-    return {name: frame[name] for name in ("features", "ratio_passed", "inliers", "geometry_valid", "read_remap_ms", "frontend_ms")}
+    return {name: frame[name] for name in ("features", "ratio_passed", "inliers", "geometry_valid", "read_image_ms", "frontend_ms")}
 
 
 def translation_metrics(frame, profile):
@@ -179,7 +179,7 @@ def summarize(rows, profile, workload):
     summary["frontend"] = timing_summary([row["frontend_ms"] for row in timed])
     if workload == "temporal":
         summary.update(
-            read_remap=timing_summary([row["read_remap_ms"] for row in timed]),
+            read_image=timing_summary([row["read_image_ms"] for row in timed]),
             precision=None, recall=None, rmse_px=None,
             reference="No per-feature ground truth for real adjacent EuRoC frames",
             empty_frames=sum(row["features"] == 0 for row in successful),
@@ -207,7 +207,7 @@ def evaluate(raw, profile, manifest, workload, execution):
         if frame["status"] == "success":
             if workload == "temporal":
                 row.update(temporal_metrics(frame, profile["tracking"]["feature_capacity"]))
-                timing_summary([frame["read_remap_ms"]])
+                timing_summary([frame["read_image_ms"]])
             else:
                 row.update(translation_metrics(frame, profile))
             timing_summary([frame["frontend_ms"]])  # Validate warmup samples too.

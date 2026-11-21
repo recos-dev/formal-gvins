@@ -80,6 +80,7 @@ the estimator's observation store.
 | `M-PROPAGATE` | [Held-input joint propagation](requirements/msckf/propagation.md) | Draft |
 | `M-CLONE` | [Pose cloning and covariance selection](requirements/msckf/clones.md) | Draft |
 | `M-VISUAL` | [Feature geometry and Jacobians](requirements/msckf/visual-geometry.md) | Draft |
+| `M-UNPROJECT` | [Calibrated pixel-to-bearing conversion](requirements/msckf/camera-unprojection.md) | Draft |
 | `M-CONSTRAINT` | [Constraint elimination and acceptance](requirements/msckf/constraints.md) | Draft |
 | `M-CORRECT` | [Joint correction and reset](requirements/msckf/correction.md) | Draft |
 | `M-FEJ` | [First estimates and coordinate consistency](requirements/msckf/consistency.md) | Draft |

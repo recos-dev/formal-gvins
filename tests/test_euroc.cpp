@@ -39,7 +39,7 @@ void fixture(std::filesystem::path const & root)
     std::string const camera =
         "camera_model: pinhole\ndistortion_model: radial-tangential\n"
         "resolution: [80, 64]\nintrinsics: [50.0, 50.0, 40.0, 32.0]\n"
-        "distortion_coefficients: [0.0, 0.0, 0.0, 0.0]\n"
+        "distortion_coefficients: [-0.2, 0.04, 0.001, -0.002]\n"
         "T_BS:\n  rows: 4\n  cols: 4\n"
         "  data: [0.0, -1.0, 0.0, 0.12, 1.0, 0.0, 0.0, -0.03, 0.0, 0.0, 1.0, 0.02, 0.0, 0.0, 0.0, 1.0]\n";
     for (std::string const name : {"cam0", "cam1"})
@@ -105,7 +105,8 @@ int main(int argc, char ** argv)
         cv::Vec4d const p_B = sequence.camera(0).T_BC * cv::Vec4d(1, 0, 0, 1);
         test.expect(cv::norm(p_B - cv::Vec4d(0.12, 0.97, 0.02, 1)) < 1e-12, "EuRoC", "T_BC direction and lever arm");
         auto const raw = cv::imread((root / "cam0/data/first.png").string(), cv::IMREAD_UNCHANGED);
-        test.expect(cv::norm(raw, sequence.read_image(0, 0), cv::NORM_INF) == 0, "EuRoC", "zero distortion remap");
+        test.expect(cv::norm(raw, sequence.read_image(0, 0), cv::NORM_INF) == 0, "EuRoC",
+                    "nonzero-distortion pixels remain raw");
         write(root / "imu0/data.csv", "1400000000000000001,1,2,3,4,5,6\n1400000000000000001,1,2,3,4,5,6\n");
         test.expect(rejects(root), "EuRoC", "duplicate timestamp");
         write(root / "imu0/data.csv", "1400000000000000001,1,2,3,4,5,nan\n");

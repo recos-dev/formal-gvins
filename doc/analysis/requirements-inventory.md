@@ -17,8 +17,8 @@ No test or proof execution is claimed by this document.
 | Common contracts, including frames | 6 |
 | Reusable mathematics | 24 |
 | Acquisition, frontend and track ownership | 7 |
-| Local MSCKF parent and children | 9 |
-| Total / Draft / Approved | 46 / 46 / 0 |
+| Local MSCKF parent and children | 10 |
+| Total / Draft / Approved | 47 / 47 / 0 |
 
 All original IDs are retained. V-TRACK has three children and SW-MSCKF has eight;
 these links allocate responsibility, not additional completed proofs. Architecture
@@ -27,7 +27,7 @@ and the two development profiles are not counted as requirements.
 **Policy** means a cross-cutting obligation. **Present** means its numerical
 operation exists, not that every clause/profile has accepted evidence. **Partial**
 means only part of the boundary is implemented. **Planned** means the responsible
-component/composition is absent. The corresponding counts are 6 policy, 24 present,
+component/composition is absent. The corresponding counts are 6 policy, 25 present,
 11 partial and 5 planned. Do not interpret these as a completion percentage.
 
 No local Lean/ESBMC suite or requirement-to-execution registry is present. Imported
@@ -100,6 +100,7 @@ commands, profile limits and distinct proof obligations.
 | [M-PROPAGATE](../spec/requirements/msckf/propagation.md) | Partial | Interval arithmetic and nominal/joint prediction in `msckf/imu.hpp` and `msckf/prediction.hpp`; native and independent-reference tests. | Raw buffer/coverage integration, exact source/convention proof, uniform rounding bounds and stochastic model qualification remain. |
 | [M-CLONE](../spec/requirements/msckf/clones.md) | Partial | `augment_clone` / `remove_clone` in `msckf/clones.hpp`; complete duplication/selection and composition tests. | Observation retirement/session identity remains a caller obligation; exact PSD/selection proofs remain. |
 | [M-VISUAL](../spec/requirements/msckf/visual-geometry.md) | Partial | Raw projection, distortion, residual and frozen Jacobians in `msckf/camera.hpp`; finite-difference/gauge reference tests. | Pointwise inverse, triangulation/refinement and assembled feature constraints are deferred. Camera/noise qualification and exact derivatives remain. |
+| [M-UNPROJECT](../spec/requirements/msckf/camera-unprojection.md) | Present | [Camera inverse](../../include/formal_gvins/camera/radtan.hpp); [known-ray and failure tests](../../tests/test_camera_inverse.cpp) | Calibrated inverse-domain qualification; no uniform floating-point proof. |
 | [M-CONSTRAINT](../spec/requirements/msckf/constraints.md) | Planned | No assembled feature-update pipeline; whitening/QR/nullspace primitives exist. | Bind rank/conditioning/gate/compression choices; verify joint transforms and statistical premises. |
 | [M-CORRECT](../spec/requirements/msckf/correction.md) | Partial | Generic `correct` in `msckf/correction.hpp`; joint Joseph, all-pose Exp injection and identity reset; native/oracle checks. | Feature constraints/consumption integration, exact identities, uniform numerical bounds and reset statistical qualification remain. |
 | [M-FEJ](../spec/requirements/msckf/consistency.md) | Partial | First-estimate storage, full frozen transition and camera Jacobians; gauge and mathematical sequence tests. | Exact gauge/source proofs, approved approximation domains and repeated visual-update statistical qualification remain. |

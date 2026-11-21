@@ -130,6 +130,7 @@ if(BUILD_TESTING)
     endfunction()
 
     add_numeric_test(scalar_standard tests/test_scalar_standard.cpp formal_gvins)
+    add_numeric_test(camera_inverse tests/test_camera_inverse.cpp formal_gvins)
     foreach(SUITE IN ITEMS linalg linalg_spd linalg_bounded so3 so3_jacobian
             msckf_state msckf_imu msckf_prediction msckf_covariance msckf_correction
             msckf_clones msckf_camera)

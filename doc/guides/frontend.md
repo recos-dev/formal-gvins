@@ -54,7 +54,7 @@ return, and results own host descriptor storage. This first implementation inclu
 uploads/downloads in execution cost; descriptors selected on the host are uploaded
 for GPU matching. Device-resident compaction is a future optimization, not an
 assumed property. GPU and CPU ORB need not select identical keypoints/descriptors.
-CUDA accelerates ORB extraction and Hamming matching. Image decoding/remapping,
+CUDA accelerates ORB extraction and Hamming matching. Image decoding,
 spatial selection, geometric checks and track bookkeeping remain on the CPU.
 Measure total pipeline latency and tracking quality, not just kernel time.
 
@@ -78,7 +78,7 @@ Include `formal_gvins/vision/orb_tracker.hpp` to construct `OrbTracker` with
 `TrackedImage` result, and `reset()` before changing stream bindings. The result
 contains image identity, an explicit pixel domain and owning observations; it
 does not contain ORB descriptors or OpenCV matching containers. The current path
-still expects undistorted images and publishes `PixelDomain::undistorted`.
+expects raw images and publishes `PixelDomain::raw`. Each observation carries its raw pixel and derived normalized ray.
 
 For ORB inspection, supply an optional fifth argument pointing to
 `OrbTrackingDiagnostics`. Its keypoints/descriptors follow the observation order;
@@ -92,7 +92,7 @@ operations without descriptors. See [V-EXECUTION](../spec/requirements/vision/fr
 
 Download and extract an ASL/CSV sequence using the [dataset guide](datasets.md).
 Pass its `mav0` directory, not a ROS bag. The first profile uses cam0 monocular
-images, fixed pinhole/radial-tangential calibration and undistorted pixels with
+images, fixed pinhole/radial-tangential calibration and raw pixels with
 the original K. Both camera streams and their extrinsics are read, but this demo
 does not perform stereo association. It requires the 17-column processed ground
 truth and an identity IMU/body extrinsic; unsupported layouts fail explicitly.
@@ -112,10 +112,11 @@ The profile publishes at most 400 observations over an 8x6 grid, selected from
 up to 1000 ORB candidates. Empty cells do not donate their quota. Matching uses
 a strict 0.75 two-neighbor ratio, deterministic one-to-one conflict resolution,
 and a calibrated essential-matrix check using OpenCV's five-point RANSAC
-(1.5 pixel threshold, 0.99 confidence, at most 2000 iterations). It requires at
+(0.003 normalized-coordinate threshold, 0.99 confidence, at most 2000 iterations). It requires at
 least eight unique candidates and eight accepted inliers. The tracker requires
-the actual undistorted-pixel K; it does not assume identity intrinsics. OpenCV
-normalizes coordinates by K and scales the threshold by the mean focal length.
+the actual radial-tangential calibration to unproject each pixel. RANSAC operates
+on these normalized coordinates with identity intrinsics; the threshold is
+explicitly normalized, not a pixel-noise specification.
 This is a geometric screen, not a parallax, pose-observability or triangulation
 acceptance test. See [the OpenCV calibration API](https://docs.opencv.org/4.13.0/d9/d0c/group__calib3d.html).
 Geometry failure creates new IDs; it never confirms all descriptor matches.
@@ -133,10 +134,10 @@ qualify that data and any normalization. IMU and truth are loaded for interface
 validation but are not fused or used to score a trajectory: this executable is
 a frontend demo, not an MSCKF.
 
-`frames.csv` separates image read/remap time from complete frontend time. The
+`frames.csv` separates image read time from complete frontend time. The
 summary excludes the first 10 frames for warmup; visualization and CSV writes are
 outside that latency. `observations.csv` records image/time/track identities and
-undistorted pixels; `profile.txt` binds configuration, calibration and OpenCV build.
+raw pixels; `profile.txt` binds configuration, calibration and OpenCV build.
 Session/calibration/noise IDs are local to that run. Resampling changes image noise;
 binding 1 is an unqualified development model, not a covariance ready for fusion.
 
@@ -248,8 +249,8 @@ Two workloads use the same selected images:
 
 | Workload | Measurement |
 |---|---|
-| Actual consecutive frames | Production temporal tracking, observation/track IDs, accepted-match counts, read/remap latency and complete frontend latency. Per-feature precision, recall and RMSE remain unavailable without correspondence truth. |
-| Synthetic translation | Translate each undistorted image by `(12, -8)` pixels with a translated validity mask. Run the same tracker on the original/translated pair, then independently score its accepted matches against that known translation at 3 pixels. This is a geometry sanity test, not physical landmark ground truth or nonplanar epipolar qualification. |
+| Actual consecutive frames | Production temporal tracking, observation/track IDs, accepted-match counts, read latency and complete frontend latency. Per-feature precision, recall and RMSE remain unavailable without correspondence truth. |
+| Synthetic translation | Translate each raw image by `(12, -8)` pixels with a translated validity mask. Run the same tracker on the original/translated pair, then independently score its accepted matches against that known translation at 3 pixels. This is a geometry sanity test, not physical landmark ground truth or nonplanar epipolar qualification. |
 
 The workloads run sequentially in separate C++ processes, each with its own
 tracker and RNG state. The second workload is still attempted if the first fails;
@@ -316,3 +317,19 @@ external GPU users and other CTest processes are outside that lock.
 CTest keeps its separate temporary run outputs in its build directory. Dataset
 files and run outputs remain Git-ignored. Numerical-core-only builds do not
 require OpenCV, Python or these dataset tests.
+
+### Pointwise camera inverse
+
+`camera/radtan.hpp` is shared with the numerical forward projection. The inverse
+uses a bounded Newton solve initialized by `(u-cx)/fx,(v-cy)/fy`, with a normalized
+radius of 2, at most 20 evaluations (hard limit 32), maximum component step 0.5,
+minimum slope 1e-4 and forward residual at most 1e-8 pixels. These are the current
+double-precision EuRoC trial settings; no image is resampled. The tracker rejects
+features whose inverse fails and publishes only raw pixels paired with valid rays.
+
+The calibration check bounds both radial Jacobian eigenvalues over the disk and
+subtracts a conservative tangential-distortion norm bound. A positive margin
+excludes folding in exact arithmetic; the floating-point check is not an interval
+proof. Unit tests independently project known rays in long double, recover them,
+cover the EuRoC image grid and reject folded domains/nonconvergence atomically.
+Image bounds and calibration identity are checked by the frontend.

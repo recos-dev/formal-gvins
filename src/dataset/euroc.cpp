@@ -196,16 +196,11 @@ CameraCalibration read_camera(std::filesystem::path const & path)
     {
         throw std::runtime_error("Invalid focal length");
     }
-    result.K = {intrinsics[0], 0, intrinsics[2], 0, intrinsics[1], intrinsics[3], 0, 0, 1};
     auto const distortion = coefficients(config["distortion_coefficients"], 4);
-    std::copy(distortion.begin(), distortion.end(), result.distortion.val);
-    // Dataset T_BS is sensor-to-dataset-body. Our B is the calibrated IMU frame.
+    result.intrinsics = {intrinsics[0], intrinsics[1], intrinsics[2], intrinsics[3],
+                         distortion[0], distortion[1], distortion[2], distortion[3]};
     result.T_BC = transform(config["T_BS"]);
-    cv::initUndistortRectifyMap(result.K, result.distortion, cv::Matx33d::eye(), result.K, result.resolution, CV_32FC1,
-                                result.map_x, result.map_y);
-    cv::Mat const source(result.resolution, CV_8UC1, cv::Scalar(255));
-    cv::remap(source, result.valid_mask, result.map_x, result.map_y, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
-    cv::compare(result.valid_mask, 255, result.valid_mask, cv::CMP_EQ);
+    result.valid_mask = cv::Mat(result.resolution, CV_8UC1, cv::Scalar(255));
     return result;
 }
 
@@ -294,9 +289,7 @@ cv::Mat EurocSequence::read_image(std::size_t camera_index, std::size_t image_in
     {
         throw std::runtime_error("Invalid image: " + sample.path.string());
     }
-    cv::Mat output;
-    cv::remap(raw, output, calibration.map_x, calibration.map_y, cv::INTER_LINEAR, cv::BORDER_CONSTANT);
-    return output;
+    return raw;
 }
 
 } /* end namespace formal_gvins::dataset */

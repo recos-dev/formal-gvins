@@ -6,6 +6,7 @@
  */
 
 #include <formal_gvins/vision/orb_tracker.hpp>
+#include <formal_gvins/scalar/backend/standard.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -20,20 +21,12 @@ namespace
 
 bool valid(OrbTrackingOptions const & options)
 {
-    auto const & K = options.camera_matrix;
-    for (double value : K.val)
-    {
-        if (!std::isfinite(value))
-        {
-            return false;
-        }
-    }
-    return K(0, 0) > 0 && K(1, 1) > 0 && K(0, 1) == 0 && K(1, 0) == 0 && K(2, 0) == 0 && K(2, 1) == 0 && K(2, 2) == 1 &&
+    return succeeded(camera::validate_inverse<scalar::StandardMath<double>>(options.camera, options.inverse)) &&
            options.feature_capacity > 0 && options.feature_capacity <= 10000 && options.grid_columns > 0 &&
            options.grid_columns <= 64 && options.grid_rows > 0 && options.grid_rows <= 64 &&
            options.feature_capacity >= options.grid_columns * options.grid_rows &&
            options.orb.feature_count >= options.feature_capacity && std::isfinite(options.ratio) && options.ratio > 0 &&
-           options.ratio < 1 && std::isfinite(options.epipolar_threshold_px) && options.epipolar_threshold_px > 0 &&
+           options.ratio < 1 && std::isfinite(options.epipolar_threshold) && options.epipolar_threshold > 0 &&
            std::isfinite(options.confidence) && options.confidence > 0 && options.confidence < 1 &&
            options.ransac_iterations > 0 && options.ransac_iterations <= 10000;
 }
@@ -70,6 +63,12 @@ OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat 
         int const quota = options.feature_capacity / cells + (cell < options.feature_capacity % cells ? 1 : 0);
         if (occupancy[static_cast<std::size_t>(cell)] < quota)
         {
+            camera::Bearing<double> bearing;
+            if (!succeeded(camera::unproject<scalar::StandardMath<double>>(key.pt.x, key.pt.y, options.camera,
+                                                                           options.inverse, bearing)))
+            {
+                continue;
+            }
             ++occupancy[static_cast<std::size_t>(cell)];
             result.keypoints.push_back(key);
             result.descriptors.push_back(input.descriptors.row(static_cast<int>(index)));
@@ -144,9 +143,15 @@ VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & cu
             return VisionStatus::invalid_input;
         }
         used_previous[query] = used_current[train] = true;
+        camera::Bearing<double> a, b;
+        if (!succeeded(camera::unproject<scalar::StandardMath<double>>(p.x, p.y, options.camera, options.inverse, a)) ||
+            !succeeded(camera::unproject<scalar::StandardMath<double>>(q.x, q.y, options.camera, options.inverse, b)))
+        {
+            continue;
+        }
         unique.push_back(match);
-        points_previous.push_back(p);
-        points_current.push_back(q);
+        points_previous.emplace_back(a.x, a.y);
+        points_current.emplace_back(b.x, b.y);
     }
     try
     {
@@ -155,9 +160,9 @@ VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & cu
         if (unique.size() >= 8U)
         {
             cv::Mat mask;
-            cv::Mat const E = cv::findEssentialMat(points_previous, points_current, options.camera_matrix, cv::RANSAC,
-                                                   options.confidence, options.epipolar_threshold_px,
-                                                   options.ransac_iterations, mask);
+            cv::Mat const E =
+                cv::findEssentialMat(points_previous, points_current, cv::Matx33d::eye(), cv::RANSAC,
+                                     options.confidence, options.epipolar_threshold, options.ransac_iterations, mask);
             if (E.rows == 3 && E.cols == 3 && cv::checkRange(E) && cv::norm(E) > 0 && mask.total() == unique.size())
             {
                 for (std::size_t index = 0; index < unique.size(); ++index)
@@ -210,7 +215,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
     {
         TrackedImage candidate;
         candidate.identity = identity;
-        candidate.pixel_domain = PixelDomain::undistorted;
+        candidate.pixel_domain = PixelDomain::raw;
         OrbTrackingDiagnostics details;
         details.features = spatial_selection(detected, image.size(), mask, m_options);
         candidate.observations.resize(details.features.keypoints.size());
@@ -247,6 +252,14 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
             }
             observation.u = details.features.keypoints[index].pt.x;
             observation.v = details.features.keypoints[index].pt.y;
+            camera::Bearing<double> bearing;
+            if (!succeeded(camera::unproject<scalar::StandardMath<double>>(
+                    observation.u, observation.v, m_options.camera, m_options.inverse, bearing)))
+            {
+                return VisionStatus::backend_failure;
+            }
+            observation.x = bearing.x;
+            observation.y = bearing.y;
         }
         // Complete allocations before committing history. Caller-owned results
         // cannot mutate descriptors retained for the next temporal match.

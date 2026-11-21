@@ -32,7 +32,7 @@ class BenchmarkTests(unittest.TestCase):
         for frame in self.manifest["frames"]:
             result = dict(frame, status="success", frontend_ms=10, geometry_valid=0)
             if workload == "temporal":
-                result.update(features=1, ratio_passed=0, inliers=0, read_remap_ms=2, observations=[[20, 20, "1"]])
+                result.update(features=1, ratio_passed=0, inliers=0, read_image_ms=2, observations=[[20, 20, "1"]])
             else:
                 result.update(source=[[20, 20, 1]], target=[[32, 12, 1]], matches=[[0, 0]])
             raw["frames"].append(result)

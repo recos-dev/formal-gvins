@@ -1,5 +1,5 @@
 {
-  "protocol": "euroc-orb-v2",
+  "protocol": "euroc-orb-v3",
   "dataset": "euroc/MH_01_easy/mav0",
   "camera": 0,
   "first_frame": 100,
@@ -18,7 +18,7 @@
     "grid_columns": 8,
     "grid_rows": 6,
     "ratio": 0.75,
-    "epipolar_threshold_px": 1.5,
+    "epipolar_threshold": 0.003,
     "confidence": 0.99,
     "ransac_iterations": 2000
   }

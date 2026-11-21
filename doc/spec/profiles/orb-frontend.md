@@ -18,12 +18,12 @@ basis for experiments, not permission to inherit another estimator's thresholds.
 
 | Setting | Current development value/policy |
 |---|---|
-| Input | Undistorted zero-skew pinhole pixels; required actual K; `CV_8UC1`, optional same-size `CV_8UC1` mask with nonzero meaning admitted. |
+| Input | Raw radial-tangential pixels; required intrinsics and distortion; `CV_8UC1`, optional same-size `CV_8UC1` mask with nonzero meaning admitted. |
 | Candidate extraction | 1000 features, scale 1.2, 8 levels, FAST 20, Harris score, patch/edge 31, first level 0. |
 | Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance; CPU and CUDA enable 7x7 Gaussian smoothing, sigma 2, `BORDER_REFLECT_101`. |
 | Publication | At most 400 features, 8 by 6 grid; stable response ordering, per-cell quotas; unused quotas are not redistributed. |
 | Association | Forward two-nearest candidates; strict ratio 0.75; greedily resolve one-to-one conflicts by distance, query index, then train index. |
-| Geometry | Calibrated essential-matrix five-point RANSAC; 1.5-pixel threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
+| Geometry | Calibrated essential-matrix five-point RANSAC; 0.003 normalized-coordinate threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
 | Failure to obtain geometry | Successful frame with no confirmed continuations; assign new IDs, never accept all matches as inliers. |
 | Stream identity | Nonzero session/calibration/noise IDs; increasing image IDs and timestamps after the first image; fixed camera/binding/image size until reset. |
 | Execution | Explicit CPU or CUDA, blocking single-owner calls; CUDA ORB and Hamming matching, other stages on CPU; no automatic fallback. |
@@ -36,26 +36,17 @@ iterations are 1--10000. These validation limits are not calibrated quality boun
 Initialization/configuration status is checked before operation-specific input;
 OpenCV exceptions are contained, while host allocation exceptions may propagate.
 
-## Local VINS target
+## Raw coordinate binding
 
-The [local VINS profile](local-vins.md) selects extraction/description on original
-distorted images and publication of raw pixel coordinates. The current tracker
-above still assumes undistorted pinhole input; its K-only essential-matrix call
-cannot be used on raw distorted coordinates unchanged.
-
-The migration must bind K and the lens model/coefficients, derive normalized
-coordinates pointwise for geometric verification, and retain raw coordinates for
-the estimator's residuals. Derived coordinates may be cached or recomputed, but
-must stay paired with the same raw feature and calibration. Inverse failures
-cannot become geometric inliers. Declare the geometric residual metric and
-threshold units before replacing the current 1.5-pixel test; its value is not a
-normalized-coordinate threshold.
-
-Keep the extraction, descriptor and capacity settings above as starting values.
-Qualify tracking, raw-pixel localization noise and CPU/CUDA benchmarks again for
-this domain. Retained remapped-image results remain an identified earlier input
-profile, not a baseline that silently changes meaning. This migration has no
-production implementation yet.
+The tracker publishes raw pixels and their derived normalized rays. Pointwise
+inverse semantics are defined by [M-UNPROJECT](../requirements/msckf/camera-unprojection.md).
+The current double-precision inverse uses radius 2, 20 evaluations, maximum
+component step 0.5, minimum slope 1e-4 and forward residual 1e-8 pixels.
+These trial values are checked against known rays and the EuRoC image domain;
+they are not a deployment accuracy or interval certificate. Failed inverses
+are excluded, with keypoint/descriptor pairing preserved. RANSAC uses normalized
+rays and an explicitly normalized threshold. Benchmark protocol v3 identifies
+this raw-image path separately from earlier remapped-image evidence.
 
 ## CPU/CUDA compatibility and acceptance gaps
 
