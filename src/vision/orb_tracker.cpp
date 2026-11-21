@@ -110,7 +110,8 @@ VisionStatus OrbTracker::prepare(ImageIdentity const & identity, cv::Mat const &
                 return status;
             }
             timer.next(FrontendStage::geometry);
-            status = verify_matches(m_previous, details.features, neighbors, reverse, m_options, details.matches);
+            status =
+                verify_temporal(m_observations, candidate.observations, neighbors, reverse, m_options, details.matches);
             if (status != VisionStatus::success)
             {
                 return status;

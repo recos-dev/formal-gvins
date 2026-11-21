@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 #include <formal_gvins/vision/orb_tracker.hpp>
 #include <formal_gvins/vision/epipolar.hpp>
-#include <formal_gvins/scalar/backend/standard.hpp>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -216,44 +215,36 @@ VisionStatus reciprocal_matches(std::vector<std::vector<cv::DMatch>> const & for
     return VisionStatus::success;
 }
 
-VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & current,
-                            std::vector<std::vector<cv::DMatch>> const & neighbors,
-                            std::vector<std::vector<cv::DMatch>> const & reverse, OrbTrackingOptions const & options,
-                            OrbMatchResult & output)
+VisionStatus verify_temporal(std::span<FeatureObservation const> previous, std::span<FeatureObservation const> current,
+                             std::vector<std::vector<cv::DMatch>> const & neighbors,
+                             std::vector<std::vector<cv::DMatch>> const & reverse, OrbTrackingOptions const & options,
+                             OrbMatchResult & output)
 {
     if (!options.valid())
     {
         return VisionStatus::invalid_input;
     }
     OrbMatchResult candidate;
-    auto const status = reciprocal_matches(neighbors, reverse, previous.keypoints.size(), current.keypoints.size(),
-                                           options.ratio, candidate.descriptors);
+    auto const status =
+        reciprocal_matches(neighbors, reverse, previous.size(), current.size(), options.ratio, candidate.descriptors);
     if (status != VisionStatus::success)
     {
         return status;
     }
-    std::vector<cv::DMatch> unique;
+    auto const & unique = candidate.descriptors.matches;
     std::vector<cv::Point2d> points_previous, points_current;
     for (auto const & match : candidate.descriptors.matches)
     {
         auto const query = static_cast<std::size_t>(match.queryIdx);
         auto const train = static_cast<std::size_t>(match.trainIdx);
-        auto const p = previous.keypoints[query].pt;
-        auto const q = current.keypoints[train].pt;
+        auto const & p = previous[query];
+        auto const & q = current[train];
         if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(q.x) || !std::isfinite(q.y))
         {
             return VisionStatus::invalid_input;
         }
-        camera::Bearing<double> a, b;
-        if (!succeeded(camera::unproject<scalar::StandardMath<double>>(p.x, p.y, options.camera, options.inverse, a)) ||
-            !succeeded(camera::unproject<scalar::StandardMath<double>>(q.x, q.y, options.camera, options.inverse, b)))
-        {
-            ++candidate.inverse_rejected;
-            continue;
-        }
-        unique.push_back(match);
-        points_previous.emplace_back(a.x, a.y);
-        points_current.emplace_back(b.x, b.y);
+        points_previous.emplace_back(p.x, p.y);
+        points_current.emplace_back(q.x, q.y);
     }
     try
     {

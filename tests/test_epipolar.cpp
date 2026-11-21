@@ -3,6 +3,17 @@
 #include <formal_gvins/vision/orb_tracker.hpp>
 #include "test_support.hpp"
 #include <limits>
+#include <formal_gvins/scalar/backend/standard.hpp>
+
+formal_gvins::vision::FeatureObservation unproject(formal_gvins::test::Context & test, cv::Point2f pixel,
+                                                   formal_gvins::camera::Radtan<double> const & camera)
+{
+    formal_gvins::camera::Bearing<double> ray;
+    test.expect(formal_gvins::succeeded(formal_gvins::camera::unproject<formal_gvins::scalar::StandardMath<double>>(
+                    pixel.x, pixel.y, camera, {}, ray)),
+                "temporal", "fixture camera inverse");
+    return {0, pixel.x, pixel.y, ray.x, ray.y};
+}
 
 int main()
 {
@@ -28,7 +39,7 @@ int main()
         {
             cv::RNG random(seed + 17);
             cv::setRNGSeed(seed);
-            OrbFeatures a, b;
+            std::vector<FeatureObservation> a, b;
             std::vector<std::vector<cv::DMatch>> neighbors;
             for (int i = 0; i < 80; ++i)
             {
@@ -45,16 +56,18 @@ int main()
                     q.x = random.uniform(-.4, .4);
                     q.y = random.uniform(-.3, .3);
                 }
-                a.keypoints.emplace_back(cv::Point2f(options.camera.fx * p.x + options.camera.cx,
-                                                     options.camera.fy * p.y + options.camera.cy),
-                                         1);
-                b.keypoints.emplace_back(cv::Point2f(options.camera.fx * q.x + options.camera.cx,
-                                                     options.camera.fy * q.y + options.camera.cy),
-                                         1);
+                a.push_back(unproject(test,
+                                      {static_cast<float>(options.camera.fx * p.x + options.camera.cx),
+                                       static_cast<float>(options.camera.fy * p.y + options.camera.cy)},
+                                      options.camera));
+                b.push_back(unproject(test,
+                                      {static_cast<float>(options.camera.fx * q.x + options.camera.cx),
+                                       static_cast<float>(options.camera.fy * q.y + options.camera.cy)},
+                                      options.camera));
                 neighbors.push_back({cv::DMatch(i, i, 10), cv::DMatch(i, (i + 1) % 80, 100)});
             }
             OrbMatchResult matches;
-            test.expect(verify_matches(a, b, neighbors, neighbors, options, matches) == VisionStatus::success &&
+            test.expect(verify_temporal(a, b, neighbors, neighbors, options, matches) == VisionStatus::success &&
                             matches.geometry_valid,
                         "temporal", "static, rotation, small baseline, planar and general scenes");
             if (scenario < 3)
@@ -84,11 +97,12 @@ int main()
                 test.expect(wrong == 0, "temporal",
                             "supplementary rotation screen rejects distractors in pure-rotation fixtures");
             }
-            for (auto & key : a.keypoints)
+            for (auto & key : a)
             {
-                key.pt = {320, 240};
+                key.x = 0;
+                key.y = 0;
             }
-            test.expect(verify_matches(a, b, neighbors, neighbors, options, matches) == VisionStatus::success &&
+            test.expect(verify_temporal(a, b, neighbors, neighbors, options, matches) == VisionStatus::success &&
                             !matches.geometry_valid && matches.inliers.empty(),
                         "temporal", "repeated coordinates fail without all-inlier fallback");
         }

@@ -137,10 +137,14 @@ VisionStatus localize_orb(cv::Mat const & image, cv::Mat const & mask, std::vect
             // Observe every sampled center: a monolithic library call does not
             // expose its intermediate path through a validity mask.
             std::vector<bool> active(points.size(), true), rejected(points.size(), false);
+            std::vector<cv::Point2f> step;
+            std::vector<std::size_t> slots;
+            step.reserve(points.size());
+            slots.reserve(points.size());
             for (int iteration = 0; iteration < limit.iterations; ++iteration)
             {
-                std::vector<cv::Point2f> step;
-                std::vector<std::size_t> slots;
+                step.clear();
+                slots.clear();
                 for (std::size_t i = 0; i < points.size(); ++i)
                 {
                     if (active[i])

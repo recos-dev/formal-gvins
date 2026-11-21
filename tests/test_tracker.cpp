@@ -9,6 +9,7 @@
 #include "test_support.hpp"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <set>
 #include <opencv2/imgproc.hpp>
 
@@ -170,13 +171,13 @@ int main(int argc, char ** argv)
     options.camera = {300, 300, 300, 200};
     options.orb.execution = argc == 2 && std::string_view(argv[1]) == "--cuda" ? Execution::cuda : Execution::cpu;
 
-    OrbFeatures previous, current;
+    std::vector<FeatureObservation> previous, current;
     std::vector<std::vector<cv::DMatch>> neighbors;
     for (int i = 0; i < 80; ++i)
     {
         double const x = random.uniform(-2.0, 2.0), y = random.uniform(-1.5, 1.5), z = random.uniform(3.0, 8.0);
-        previous.keypoints.emplace_back(
-            cv::Point2f(300.0F + static_cast<float>(300 * x / z), 200.0F + static_cast<float>(300 * y / z)), 1);
+        cv::Point2f const first(300.0F + static_cast<float>(300 * x / z), 200.0F + static_cast<float>(300 * y / z));
+        previous.push_back({0, first.x, first.y, (first.x - 300.) / 300., (first.y - 200.) / 300.});
         double const x2 = std::cos(0.08) * x + std::sin(0.08) * z + 0.3;
         double const z2 = -std::sin(0.08) * x + std::cos(0.08) * z;
         cv::Point2f p(300.0F + static_cast<float>(300 * x2 / z2), 200.0F + static_cast<float>(300 * (y + 0.05) / z2));
@@ -184,14 +185,14 @@ int main(int argc, char ** argv)
         {
             p = {random.uniform(50.0F, 550.0F), random.uniform(50.0F, 350.0F)};
         }
-        current.keypoints.emplace_back(p, 1);
+        current.push_back({0, p.x, p.y, (p.x - 300.) / 300., (p.y - 200.) / 300.});
         neighbors.push_back({cv::DMatch(i, i, 10), cv::DMatch(i, (i + 1) % 80, 100)});
     }
     auto const reverse = neighbors;
     OrbMatchResult matches;
     OrbTrackingOptions geometry_options = options;
     geometry_options.epipolar_threshold = 0.1 / 300;
-    test.expect(verify_matches(previous, current, neighbors, reverse, geometry_options, matches) ==
+    test.expect(verify_temporal(previous, current, neighbors, reverse, geometry_options, matches) ==
                         VisionStatus::success &&
                     matches.geometry_valid,
                 "geometry", "nonplanar calibrated scene");
@@ -210,7 +211,7 @@ int main(int argc, char ** argv)
     test.expect(true_inliers >= 60 && false_inliers <= 2, "geometry", "known outlier rejection");
     auto conflicting = neighbors;
     conflicting.push_back({cv::DMatch(64, 0, 20), cv::DMatch(64, 1, 100)});
-    test.expect(verify_matches(previous, current, conflicting, reverse, geometry_options, matches) ==
+    test.expect(verify_temporal(previous, current, conflicting, reverse, geometry_options, matches) ==
                     VisionStatus::invalid_input,
                 "matching", "duplicate query proposal rejected");
     std::set<int> query_indices, train_indices;
@@ -222,7 +223,7 @@ int main(int argc, char ** argv)
     auto const retained_count = matches.inliers.size();
     auto malformed = neighbors;
     malformed[0][0].trainIdx = -1;
-    test.expect(verify_matches(previous, current, malformed, reverse, options, matches) ==
+    test.expect(verify_temporal(previous, current, malformed, reverse, options, matches) ==
                         VisionStatus::invalid_input &&
                     matches.inliers.size() == retained_count,
                 "matching", "invalid index preserves result");
@@ -231,17 +232,25 @@ int main(int argc, char ** argv)
     {
         pair[0].distance = pair[1].distance = 0;
     }
-    test.expect(verify_matches(previous, current, tied, reverse, options, matches) == VisionStatus::success &&
+    test.expect(verify_temporal(previous, current, tied, reverse, options, matches) == VisionStatus::success &&
                     matches.descriptors.forward_ratio_passed == 0 && matches.inliers.empty() && !matches.geometry_valid,
                 "matching", "zero-distance ties rejected");
+    auto const finite_x = current[0].x;
+    current[0].x = std::numeric_limits<double>::quiet_NaN();
+    auto const saved_matches = matches.inliers.size();
+    test.expect(verify_temporal(previous, current, neighbors, reverse, options, matches) ==
+                        VisionStatus::invalid_input &&
+                    matches.inliers.size() == saved_matches,
+                "geometry", "nonfinite cached ray fails without changing the result");
+    current[0].x = finite_x;
     neighbors.resize(7);
-    test.expect(verify_matches(previous, current, neighbors, reverse, options, matches) == VisionStatus::success &&
+    test.expect(verify_temporal(previous, current, neighbors, reverse, options, matches) == VisionStatus::success &&
                     matches.inliers.empty() && !matches.geometry_valid,
                 "matching", "no all-inlier fallback below profile candidate minimum");
 
     OrbTrackingOptions invalid = options;
     invalid.camera.fx = 0;
-    test.expect(verify_matches(previous, current, neighbors, reverse, invalid, matches) == VisionStatus::invalid_input,
+    test.expect(verify_temporal(previous, current, neighbors, reverse, invalid, matches) == VisionStatus::invalid_input,
                 "geometry", "invalid camera calibration rejected");
 
     OrbTracker tracker(options);

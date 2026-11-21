@@ -378,7 +378,10 @@ associations before geometry; no absolute Hamming cutoff is enabled.
 
 ### Temporal geometry
 
-Both views use calibrated normalized rays. Five-point essential RANSAC proposes
+Both views use the admitted normalized rays already stored with their raw pixels;
+temporal verification does not repeat camera inversion. Its standalone entry point
+is `verify_temporal`, while `verify_stereo` applies known-rig geometry.
+Five-point essential RANSAC proposes
 a model; it must have sufficient two-dimensional sample spread and at least
 eight supporting correspondences. The model is normalized to unit Frobenius
 norm and every accepted RANSAC inlier must also satisfy the explicit squared

@@ -12,6 +12,7 @@
 #include <formal_gvins/vision/tracker.hpp>
 #include <formal_gvins/vision/selection.hpp>
 #include <cstddef>
+#include <span>
 #include <vector>
 
 namespace formal_gvins::vision
@@ -52,16 +53,19 @@ struct OrbMatchResult
 {
     std::vector<cv::DMatch> inliers; // query=previous, train=current
     DescriptorMatches descriptors;
-    std::size_t inverse_rejected = 0;
     bool rotation_checked = false;
     bool geometry_valid = false;
 };
 
-/** Reciprocal descriptor association followed by calibrated geometry. */
-[[nodiscard]] VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & current,
-                                          std::vector<std::vector<cv::DMatch>> const & neighbors,
-                                          std::vector<std::vector<cv::DMatch>> const & reverse,
-                                          OrbTrackingOptions const & options, OrbMatchResult & output);
+/** Reciprocal association and temporal geometry using already admitted normalized rays.
+ * The producer owns raw/bearing pairing, inverse-domain and calibration identity checks.
+ * Malformed matching indices or nonfinite referenced rays fail atomically.
+ */
+[[nodiscard]] VisionStatus verify_temporal(std::span<FeatureObservation const> previous,
+                                           std::span<FeatureObservation const> current,
+                                           std::vector<std::vector<cv::DMatch>> const & neighbors,
+                                           std::vector<std::vector<cv::DMatch>> const & reverse,
+                                           OrbTrackingOptions const & options, OrbMatchResult & output);
 
 /** Optional ORB data for inspection; keypoints/descriptors follow the observation order. */
 struct OrbTrackingDiagnostics
