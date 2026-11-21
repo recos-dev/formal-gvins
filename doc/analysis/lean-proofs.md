@@ -119,8 +119,29 @@ The ordinary transition's exact differential kernels and the FEJ frame/block
 comparison are separate claims; group 7 owns the latter. Bias/clone immutability
 and atomic publication still require C++ evidence.
 
+## Group 5: Process noise and joint covariance
+
+Requirements: M-PROPAGATE and M-FEJ. Source: `msckf/prediction.hpp`.
+`ProcessNoise.lean` binds the five IMU error blocks and four noise blocks explicitly;
+`Blocks.lean` proves their flattening into the 15/12 coefficient dimensions.
+The block algebra adapts the owner-authored foundation cited in group 1.
+
+| Statements | Exact claim and premises |
+|---|---|
+| `noise_matches_bias_columns`, `intervalCovariance_entries` | Gd's upper rows use the transition's bias-sensitive columns; Qd=Gd*(Qc/h)*Gd-transpose retains every correlation in Qc. |
+| `intervalCovariance_psd` | PSD Qc and positive duration imply PSD Qd, with no isotropy assumption. |
+| `zero_rate_accelerometer_noise`, `bias_random_walk_scaling` | Zero-rate pp/pv/vv coefficients are h^3/4, h^2/2 and h; bias density scales by h. The rotation sandwich is retained for anisotropic noise. |
+| `joint_covariance_blocks`, `joint_noise_psd`, `joint_prediction_psd`, `joint_flatten_psd` | Full IMU/clone covariance, both cross-blocks and retained clone block; congruence plus added PSD noise preserves PSD and flattening preserves that claim. |
+| `segment_recurrence`, `split_noise_not_unsplit` | Independent segment noise is propagated and accumulated. A checked one-axis two-state counterexample shows why one long interval-average Qd need not agree. |
+
+The model uses interval-equivalent disturbances. It is not the exact continuous
+white-noise covariance integral, nor a proof of valid physical noise calibration.
+PSD/symmetry are exact input premises; finite/diagonal C++ admission is not a PSD
+certificate. Approximate A/B/J factors and rounded covariance cleanup require
+separate numerical/source evidence. Clone identity/time semantics are unchanged.
+
 ## Remaining sequence
 
-Groups 5–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
+Groups 6–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
 and will receive their own theorem/premise mappings as implemented. Groups 8–11
 remain backlog. No completion percentage is inferred from declaration counts.
