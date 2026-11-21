@@ -119,13 +119,36 @@ FEJ cache and observation ledger contracts kept distinct and composable.
   self-review and proceeding to the next. This does not authorize deferred work
   or approve Draft requirements.
 
-This sequence verifies equations and implements mathematical filter operations; it does not
-claim complete formal verification. The repository currently has no local
-Lean/ESBMC suite. Exact mathematical proofs and bounded source checks remain
-explicit obligations in the [verification policy](spec/verification.md), with a
-separate tooling/proof workstream to be scoped from action 1's inventory. Importing
-formal-eskf primitives or passing reference tests does not discharge them. No
-full-image, full-trajectory or maximum-dimension symbolic unrolling is assumed.
+### Exact Lean proof sequence
+
+Execute groups 1–7 in order, with source correspondence review and a warning-free
+Lean build before each commit. The [proof inventory](analysis/lean-proofs.md)
+owns theorem mappings, premises and claim boundaries. These mathematical proofs
+do not establish C++ execution, IEEE-754 accuracy or acceptance of Draft requirements.
+
+| Group | Scope |
+|---|---|
+| 1 | Hamilton quaternions, SO(3), Exp/Log and right Jacobian |
+| 2 | Active matrix layout, Cholesky/solves, pivoted Givens QR, whitening and nullspace algebra |
+| 3 | Joint state layout and covariance cloning/removal |
+| 4 | IMU input interpolation, held-input mean and ordinary transition model |
+| 5 | Interval noise and complete joint covariance propagation |
+| 6 | Correction, Exp injection and the selected identity reset |
+| 7 | Frozen FEJ gauge transport and composition |
+
+The following proof groups remain backlog, outside this implementation sequence:
+
+| Group | Deferred scope |
+|---|---|
+| 8 | Camera projection/unprojection and analytic visual derivatives |
+| 9 | Temporal/stereo epipolar geometry and degenerate cases |
+| 10 | Discrete frontend association, selection and track lifecycle |
+| 11 | Complete approximation, rounding and numerical-library error bounds, including Gamma truncation and five-point quadrature |
+
+Selected exact Taylor identities in the SO(3) foundation do not complete group 11.
+Source-level failure/alias/memory verification and whole-estimator consistency
+qualification also remain separate work. No full-image, full-trajectory or
+maximum-dimension symbolic unrolling is assumed.
 
 ### Deferred optimization and local VINS integration
 

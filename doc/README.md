@@ -20,6 +20,7 @@ requirement-decomposition relationship.
 | CPU/CUDA frontend and EuRoC replay | [Frontend build and usage](guides/frontend.md) |
 | ORB settings and reference implementations | [Frontend parameter comparison](analysis/orb-frontend-settings.md) |
 | Feature frontend regression and comparison | [Benchmark design proposal](analysis/feature-benchmarks.md) |
+| Lean mathematical proofs | [Run, scope and theorem mapping](analysis/lean-proofs.md) |
 | MSCKF mathematical APIs and checks | [Usage and bounds](guides/msckf-math.md); [verification inventory](analysis/msckf-verification.md) |
 | Bounded MSCKF numerical operations | [Linear algebra inventory and implementation boundary](analysis/msckf-linear-algebra.md) |
 | MSCKF literature and design decisions | [Design cross-check and open consistency decision](analysis/msckf-design-review.md) |

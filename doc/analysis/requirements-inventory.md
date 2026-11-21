@@ -31,9 +31,10 @@ means only part of the boundary is implemented. **Planned** means the responsibl
 component/composition is absent. The corresponding counts are 6 policy, 25 present,
 13 partial and 5 planned. Do not interpret these as a completion percentage.
 
-No local Lean/ESBMC suite or requirement-to-execution registry is present. Imported
-native tests do not transfer formal-eskf's proofs. Current mathematical acceptance
-still needs exact identities, scoped source checks and justified numerical domains;
+The local [Lean proof inventory](lean-proofs.md) records exact claims and their
+source correspondence. No local ESBMC suite or requirement-to-execution registry
+is present. Imported native tests do not transfer formal-eskf's proofs. Scoped
+source checks and justified numerical domains remain separate obligations;
 frontend tests do not establish physical association or navigation accuracy.
 
 ## Common contracts

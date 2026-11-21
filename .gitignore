@@ -5,3 +5,6 @@
 __pycache__/
 *.py[cod]
 *.sw*
+/formal/lean/.lake/
+/tools/elan/
+/tools/bootstrap/
