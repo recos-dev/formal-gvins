@@ -93,8 +93,8 @@ operations without descriptors. See [V-EXECUTION](../spec/requirements/vision/fr
 Download and extract an ASL/CSV sequence using the [dataset guide](datasets.md).
 Pass its `mav0` directory, not a ROS bag. The first profile uses cam0 monocular
 images, fixed pinhole/radial-tangential calibration and raw pixels with
-the original K. Both camera streams and their extrinsics are read, but this demo
-does not perform stereo association. It requires the 17-column processed ground
+the original K. Both camera streams and their extrinsics are read; this executable is mono.
+The separate [stereo replay](#calibrated-stereo-replay) performs cross-camera association. It requires the 17-column processed ground
 truth and an identity IMU/body extrinsic; unsupported layouts fail explicitly.
 
 ```bash
@@ -465,3 +465,43 @@ change. It does not invent regression limits or approve a baseline automatically
 Translation tests have an independently known pixel correspondence, not ground
 truth for general 3D motion. EuRoC temporal precision/recall and trajectory RMSE
 remain N/A; its pose truth does not identify each image feature.
+
+## Calibrated stereo replay
+
+```bash
+./build/frontend-cpu/euroc_stereo datasets/euroc/MH_01_easy/mav0 --frames 100
+./build/frontend-cuda/euroc_stereo datasets/euroc/MH_01_easy/mav0 --frames 100 --cuda
+```
+
+This separate application assembles `StereoOrbTracker` from two camera models and
+`R_RL,t_RL` derived from EuRoC's camera-to-body transforms. It pairs exact acquisition
+timestamps, reports skipped unmatched exposures, and never pairs by arrival or
+nearest timestamp. Output defaults to `output/<sequence>/stereo-cpu` or
+`stereo-cuda`; `--output DIR` overrides it. CSVs carry each camera's observations,
+per-camera lifecycle/ages, stereo link/rejection/conflict counts and complete pair
+latency. PNG snapshots show cross-camera links. The demo uses the current trial
+profile and does not estimate a trajectory or triangulate points.
+
+The shared result remains two method-neutral `TrackedImage` records. New verified
+partners share an ID; existing different IDs are never renamed to force a match.
+If stereo fails, independently valid mono results survive. Invalid camera input
+or a temporal backend error preserves both outputs and histories; both prepared
+histories commit only after all fallible work succeeds. A feature can disappear
+from one camera and reacquire its global ID through the other. Its new camera
+segment starts at age one; this is not reuse of a globally retired ID.
+
+The reusable tracker takes identified exposure pairs with a caller-qualified
+maximum skew (zero by default). Label equality alone does not qualify physical
+synchronization. Raw stereo uses known-rig normalized epipolar geometry and does
+not assume rectified rows. Epipolar agreement cannot establish cheirality, depth
+accuracy or physical feature identity. See [V-STEREO](../spec/requirements/vision/stereo-association.md)
+and the [development profile](../spec/profiles/orb-frontend.md#optional-stereo-binding).
+
+`stereo_tracking` covers a nonparallel rig with distinct distorted cameras,
+labeled outliers, degeneracy, skew, ID conflicts, reset and camera reacquisition.
+`tracker_failure` injects a second-camera temporal exception and a stereo-only
+matching exception into production dependency calls. Exact failure snapshots are
+checked for both CPU and CUDA; only CPU uses an exact independent-control oracle.
+CUDA detection/culling can change the candidate set between repeated executions,
+so GPU validation checks contracts and labeled metrics without asserting identical
+independent runs.

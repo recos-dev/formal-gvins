@@ -94,7 +94,21 @@ void test_optional_diagnostics(formal_gvins::test::Context & test, OrbTrackingOp
         cv::setRNGSeed(71);
         auto const inspected_status = inspected.process(identity, frame, {}, reference, &diagnostics);
         test.expect(status == expected && inspected_status == expected, "interface", "matching operation status");
-        test.expect(same_observations(output, reference), "interface", "diagnostics do not change observations or IDs");
+        if (options.orb.execution == formal_gvins::vision::Execution::cpu)
+        {
+            test.expect(same_observations(output, reference), "interface",
+                        "diagnostics do not change observations or IDs");
+        }
+        // GPU detection has non-deterministic candidate culling; independent runs
+        // are not an exact-output oracle. Pairing and failure atomicity still apply.
+        test.expect(reference.observations.size() == diagnostics.features.keypoints.size(), "interface",
+                    "diagnostic rows match observations");
+        for (std::size_t i = 0; i < reference.observations.size(); ++i)
+        {
+            auto const & point = diagnostics.features.keypoints[i].pt;
+            test.expect(reference.observations[i].u == point.x && reference.observations[i].v == point.y, "interface",
+                        "diagnostic points agree with published pixels");
+        }
         for (std::size_t i = 0; i < diagnostics.stages.size(); ++i)
         {
             auto const & stage = diagnostics.stages[i];
@@ -350,10 +364,7 @@ int main(int argc, char ** argv)
     {
         test.expect(first_ids.count(observation.track_id) == 0, "tracking", "reset does not reuse IDs");
     }
-    if (options.orb.execution == Execution::cpu)
-    {
-        test_optional_diagnostics(test, options, image);
-    }
+    test_optional_diagnostics(test, options, image);
 #if !defined(FORMAL_GVINS_FRONTEND_CUDA)
     auto cuda_options = options;
     cuda_options.orb.execution = Execution::cuda;

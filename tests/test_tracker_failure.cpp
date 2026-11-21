@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-#include <formal_gvins/vision/orb_tracker.hpp>
+#include <formal_gvins/vision/stereo_tracker.hpp>
 #include "test_support.hpp"
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
@@ -8,6 +8,8 @@ namespace
 {
 bool inject_failure = false;
 int intercepted_calls = 0;
+int fail_essential_call = 0;
+int match_calls = 0, fail_match_call = 0;
 } // namespace
 
 // GNU/Clang ELF test seam for the exact overload in the pinned OpenCV 4.13.
@@ -23,11 +25,31 @@ extern "C" cv::Mat wrapped_essential(cv::InputArray a, cv::InputArray b, cv::Inp
                                      double probability, double threshold, int iterations, cv::OutputArray mask)
 {
     ++intercepted_calls;
-    if (inject_failure)
+    if (inject_failure || intercepted_calls == fail_essential_call)
     {
         CV_Error(cv::Error::StsError, "Injected geometry backend failure");
     }
     return real_essential(a, b, K, method, probability, threshold, iterations, mask);
+}
+
+// Dependency-level injection only in this executable, including the stereo-only phase.
+extern "C" void real_knn(cv::DescriptorMatcher const *, cv::InputArray, cv::InputArray,
+                         std::vector<std::vector<cv::DMatch>> &, int, cv::InputArray,
+                         bool) asm("__real__ZNK2cv17DescriptorMatcher8knnMatchERKNS_11_InputArrayES3_RSt6vectorIS4_INS_"
+                                   "6DMatchESaIS5_EESaIS7_EEiS3_b");
+extern "C" void wrapped_knn(cv::DescriptorMatcher const *, cv::InputArray, cv::InputArray,
+                            std::vector<std::vector<cv::DMatch>> &, int, cv::InputArray,
+                            bool) asm("__wrap__ZNK2cv17DescriptorMatcher8knnMatchERKNS_11_InputArrayES3_RSt6vectorIS4_"
+                                      "INS_6DMatchESaIS5_EESaIS7_EEiS3_b");
+extern "C" void wrapped_knn(cv::DescriptorMatcher const * self, cv::InputArray a, cv::InputArray b,
+                            std::vector<std::vector<cv::DMatch>> & matches, int k, cv::InputArray mask, bool compact)
+{
+    ++match_calls;
+    if (match_calls == fail_match_call)
+    {
+        CV_Error(cv::Error::StsError, "Injected stereo matching failure");
+    }
+    real_knn(self, a, b, matches, k, mask, compact);
 }
 
 bool same(formal_gvins::vision::TrackedImage const & a, formal_gvins::vision::TrackedImage const & b)
@@ -54,6 +76,54 @@ bool same(formal_gvins::vision::TrackedImage const & a, formal_gvins::vision::Tr
         }
     }
     return true;
+}
+
+void stereo_failures(formal_gvins::test::Context & test, cv::Mat const & image)
+{
+    using namespace formal_gvins::vision;
+    StereoTrackingOptions options;
+    for (auto & camera : options.cameras)
+    {
+        camera.camera = {400, 400, 376, 240};
+    }
+    options.rig.t_RL = {-.1, 0, 0};
+    StereoOrbTracker tracker(options), control(options);
+    std::array<cv::Mat, 2> images{image, image};
+    std::array<ImageIdentity, 2> ids{ImageIdentity{1, 0, 1, 100, 1, 1}, ImageIdentity{1, 1, 1, 100, 2, 1}};
+    std::array<TrackedImage, 2> output, reference;
+    StereoTrackingDiagnostics details;
+    test.expect(tracker.process(ids, images, {}, output, &details) == VisionStatus::success &&
+                    control.process(ids, images, {}, reference) == VisionStatus::success,
+                "stereo failure", "initial pair");
+    auto const saved = output;
+    for (auto & id : ids)
+    {
+        ++id.image_id;
+        id.time_ns += 100;
+    }
+    fail_essential_call = intercepted_calls + 2; // Left preparation succeeds; right temporal geometry throws.
+    test.expect(tracker.process(ids, images, {}, output, &details) == VisionStatus::backend_failure &&
+                    intercepted_calls == fail_essential_call && same(output[0], saved[0]) && same(output[1], saved[1]),
+                "stereo failure", "second camera backend failure commits neither history");
+    fail_essential_call = 0;
+    cv::setRNGSeed(11);
+    test.expect(tracker.process(ids, images, {}, output, &details) == VisionStatus::success, "stereo failure", "retry");
+    cv::setRNGSeed(11);
+    test.expect(control.process(ids, images, {}, reference) == VisionStatus::success && same(output[0], reference[0]) &&
+                    same(output[1], reference[1]),
+                "stereo failure", "retry matches unmodified two-camera control");
+    for (auto & id : ids)
+    {
+        ++id.image_id;
+        id.time_ns += 100;
+    }
+    fail_match_call = match_calls + 5; // Two directions for each temporal camera, then first stereo direction.
+    test.expect(tracker.process(ids, images, {}, output, &details) == VisionStatus::success &&
+                    match_calls == fail_match_call && details.association == StereoStatus::backend_failure &&
+                    details.matches.inliers.empty() && details.cameras[0].matches.inliers.size() > 20 &&
+                    details.cameras[1].matches.inliers.size() > 20,
+                "stereo failure", "stereo-only backend exception preserves valid mono continuations");
+    fail_match_call = 0;
 }
 
 int main()
@@ -113,5 +183,6 @@ int main()
                 "failure", "image geometry switch");
     test.expect(tracker.process(invalid, {}, {}, output) == VisionStatus::invalid_input && same(output, retained),
                 "failure", "missing image is not a featureless image");
+    stereo_failures(test, image);
     return test.failures() == 0 ? 0 : 1;
 }

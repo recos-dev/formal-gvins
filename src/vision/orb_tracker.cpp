@@ -196,10 +196,26 @@ VisionStatus OrbTracker::finish(PendingFrame & pending, std::uint64_t & next_id,
                     return VisionStatus::invalid_input;
                 }
                 observation.track_id = next_id++;
+                details.ages[index] = 1;
             }
             if (details.ages[index] == 0)
             {
-                details.ages[index] = 1;
+                // A stereo link can recover an ID still active in the other camera.
+                auto const old = std::find_if(m_observations.begin(), m_observations.end(),
+                                              [&](auto const & item) { return item.track_id == observation.track_id; });
+                if (old == m_observations.end())
+                {
+                    details.ages[index] = 1;
+                }
+                else
+                {
+                    auto const age = m_ages[static_cast<std::size_t>(old - m_observations.begin())];
+                    if (age == std::numeric_limits<std::uint64_t>::max())
+                    {
+                        return VisionStatus::invalid_input;
+                    }
+                    details.ages[index] = age + 1;
+                }
             }
         }
         std::vector<std::uint64_t> active_ids;

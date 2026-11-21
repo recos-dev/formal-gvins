@@ -59,7 +59,8 @@ proofs, native tests and identified executions.
 
 | ID | Requirement | Status |
 |---|---|---|
-| `V-ORB` | [ORB extraction and temporal association](requirements/vision/orb-frontend.md) | Draft |
+| `V-ORB` | [ORB extraction and association](requirements/vision/orb-frontend.md) | Draft |
+| `V-STEREO` | [Calibrated stereo association](requirements/vision/stereo-association.md) | Draft |
 | `V-LOCALIZE` | [Subpixel feature localization](requirements/vision/feature-localization.md) | Draft |
 | `V-TRACK` | [Feature observation identity and ownership](requirements/vision/feature-tracks.md) | Draft |
 | `V-OBSERVATION` | [Observation identity and admission](requirements/vision/observation-admission.md) | Draft |
@@ -94,9 +95,9 @@ obligations; calling an operation does not make the caller its requirement child
 ## Development profiles
 
 - [ORB frontend](profiles/orb-frontend.md): current CPU/CUDA settings, validation
-  ranges, raw-image migration, descriptor compatibility and unresolved quality/resource acceptance.
+  ranges, raw-image/stereo bindings, descriptor compatibility and unresolved quality/resource acceptance.
 - [EuRoC acquisition](profiles/euroc.md): dataset conversion, coordinates/time,
-  current remapped-image behavior, raw-image target and estimator/scoring qualifications.
+  raw-image behavior, optional exact-timestamp stereo and estimator/scoring qualifications.
 - [Local VINS](profiles/local-vins.md): proposed mono/CPU estimator bindings,
   raw-pixel camera model, initialization, capacities, propagation evaluation,
   FEJ/reset limits and updates.

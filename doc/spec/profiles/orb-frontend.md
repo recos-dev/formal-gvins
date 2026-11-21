@@ -3,6 +3,8 @@
 **Status:** Draft; current development settings, not deployment acceptance.
 
 **Requirements:** [V-ORB](../requirements/vision/orb-frontend.md),
+[V-LOCALIZE](../requirements/vision/feature-localization.md),
+[V-STEREO](../requirements/vision/stereo-association.md) when enabled,
 [V-EXECUTION](../requirements/vision/frontend-execution.md),
 [V-OBSERVATION](../requirements/vision/observation-admission.md).
 
@@ -45,7 +47,7 @@ component step 0.5, minimum slope 1e-4 and forward residual 1e-8 pixels.
 These trial values are checked against known rays and the EuRoC image domain;
 they are not a deployment accuracy or interval certificate. Failed inverses
 are excluded, with keypoint/descriptor pairing preserved. RANSAC uses normalized
-rays and an explicitly normalized threshold. Benchmark protocol v3 identifies
+rays and an explicitly normalized threshold. Benchmark protocol v4 identifies
 this raw-image path separately from earlier remapped-image evidence.
 
 ## Raw-image qualification
@@ -95,3 +97,31 @@ allocation-failure recovery and target deadlines. RTX 3060 measurements cannot
 qualify Orin execution. The replay's development noise-model ID does not discharge
 these obligations. [Per-module benchmarks](../../roadmap.md#b-01-per-module-unit-benchmarks)
 remain planned evidence.
+
+## Optional stereo binding
+
+[StereoOrbTracker](../../../include/formal_gvins/vision/stereo_tracker.hpp) applies
+both mono trackers, then reciprocal association using fixed rig geometry. The
+[Stereo demo](../../../examples/euroc_stereo.cpp) uses EuRoC cam0/cam1 and converts
+camera-to-body extrinsics using V-STEREO. Images remain raw and unrectified.
+
+| Setting | Development value/policy |
+|---|---|
+| Synchronization | Exact acquisition timestamp equality in the EuRoC demo; unmatched exposures are skipped. The reusable tracker accepts a caller-qualified maximum skew, default zero. No asynchronous motion compensation. |
+| Rig | Finite proper R_RL, orthogonality/determinant residuals at most 1e-8, finite nonzero t_RL. Structural checks do not qualify physical calibration. |
+| Stereo screen | Reciprocal ratio 0.75; known E=[t_RL]_x R_RL normalized to unit Frobenius norm; Sampson threshold 0.003 and denominator floor 1e-12. No estimated F, horizontal-row assumption or depth gate. |
+| Identity | One allocator for both cameras; temporal IDs take priority, old/old conflicts reject, new partners may share/inherit an ID, no duplicate ID within a camera image. |
+| Failure | Invalid camera input/temporal failure preserves both outputs/histories; stereo rejection/skew/backend failure keeps valid mono results with explicit association status. |
+| Lifecycle | Events/ages are per-camera segments. A camera may reacquire an ID still live in its partner; globally retired numbers are not recycled. |
+
+The same camera, ORB and publication defaults apply to each view. A geometry link
+alone does not establish triangulation, positive depth, exposure synchronization,
+physical correspondence or estimator acceptance. Stereo noise/overlap/motion limits
+remain unqualified. Numerical outputs can agree with the declared model while the
+physical calibration or synchronization assumptions are wrong.
+
+CUDA FAST insertion/culling may choose different candidate sets even for repeated
+inputs on one device. Independent GPU runs are therefore not a bit-exact identity
+oracle. Tests retain exact failure-snapshot checks, row/ID invariants and labeled
+quality checks; deterministic CPU executions additionally compare retries with an
+untouched control. This does not waive reproducibility metadata or acceptance limits.

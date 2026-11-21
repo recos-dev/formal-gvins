@@ -16,19 +16,19 @@ No test or proof execution is claimed by this document.
 |---|---:|
 | Common contracts, including frames | 6 |
 | Reusable mathematics | 24 |
-| Acquisition, frontend and track ownership | 8 |
+| Acquisition, frontend and track ownership | 9 |
 | Local MSCKF parent and children | 10 |
-| Total / Draft / Approved | 48 / 48 / 0 |
+| Total / Draft / Approved | 49 / 49 / 0 |
 
 All original IDs are retained. V-TRACK has three children and SW-MSCKF has eight;
 these links allocate responsibility, not additional completed proofs. Architecture
-and the two development profiles are not counted as requirements.
+and development profiles are not counted as requirements.
 
 **Policy** means a cross-cutting obligation. **Present** means its numerical
 operation exists, not that every clause/profile has accepted evidence. **Partial**
 means only part of the boundary is implemented. **Planned** means the responsible
 component/composition is absent. The corresponding counts are 6 policy, 25 present,
-12 partial and 5 planned. Do not interpret these as a completion percentage.
+13 partial and 5 planned. Do not interpret these as a completion percentage.
 
 No local Lean/ESBMC suite or requirement-to-execution registry is present. Imported
 native tests do not transfer formal-eskf's proofs. Current mathematical acceptance
@@ -79,12 +79,13 @@ frontend tests do not establish physical association or navigation accuracy.
 
 | Requirement | Implementation scope | Source / test pointers | Review or evidence gap |
 |---|---|---|---|
-| [V-ACQUISITION](../spec/requirements/vision/acquisition.md) | Partial | [EuRoC reader](../../src/dataset/euroc.cpp); [fixtures](../../tests/test_euroc.cpp) | Parsing/remapping exist; the selected local VINS raw-image/calibration binding needs migration. Exposure/clock/noise qualification, interval binding and truth scoring remain gaps. |
-| [V-EXECUTION](../spec/requirements/vision/frontend-execution.md) | Partial | [Shared result/status](../../include/formal_gvins/vision/tracker.hpp), [OrbExtractor](../../src/vision/orb.cpp), tracker; [ORB](../../tests/test_orb.cpp) and [tracker tests](../../tests/test_tracker.cpp) | Method-neutral output, optional diagnostics and blocking ownership/availability exist; device-error, allocation recovery and deployment timing/overload qualification remain gaps. |
-| [V-ORB](../spec/requirements/vision/orb-frontend.md) | Partial | [Extractor](../../src/vision/orb.cpp), [tracker](../../src/vision/orb_tracker.cpp); [extractor tests](../../tests/test_orb.cpp), [tracker tests](../../tests/test_tracker.cpp) | Raw-image publication and pointwise undistortion for geometric verification are not implemented. Bind epipolar units, qualify the changed noise/benchmark domain, descriptor compatibility and quality/resource bounds. |
+| [V-ACQUISITION](../spec/requirements/vision/acquisition.md) | Partial | [EuRoC reader](../../src/dataset/euroc.cpp); [fixtures](../../tests/test_euroc.cpp) | Raw-image/calibration parsing and optional exact-timestamp stereo pairing exist. Exposure/clock/noise qualification, interval binding and truth scoring remain gaps. |
+| [V-EXECUTION](../spec/requirements/vision/frontend-execution.md) | Partial | [Shared result/status](../../include/formal_gvins/vision/tracker.hpp), [OrbExtractor](../../src/vision/orb.cpp), tracker; [ORB](../../tests/test_orb.cpp) and [tracker tests](../../tests/test_tracker.cpp) | Method-neutral output, optional diagnostics and blocking ownership/availability exist; injected dependency-failure tests cover atomic transactions; actual device-loss, allocation recovery and deployment timing/overload qualification remain gaps. |
+| [V-ORB](../spec/requirements/vision/orb-frontend.md) | Partial | [Extractor](../../src/vision/orb.cpp), [tracker](../../src/vision/orb_tracker.cpp); [extractor tests](../../tests/test_orb.cpp), [tracker tests](../../tests/test_tracker.cpp) | Raw pixels/rays, subpixel refinement, reciprocal matches, normalized temporal geometry and continuation-first selection exist. Qualify real-camera noise, held-out matching accuracy, descriptor compatibility and resource bounds; native benchmarks do not establish deployment acceptance. |
 | [V-LOCALIZE](../spec/requirements/vision/feature-localization.md) | Partial | [Localizer](../../src/vision/localization.cpp); [known-corner tests](../../tests/test_localization.cpp) | Real-camera and per-octave noise/accuracy qualification remains open. |
+| [V-STEREO](../spec/requirements/vision/stereo-association.md) | Partial | [Stereo tracker](../../src/vision/stereo_tracker.cpp); [rig/identity tests](../../tests/test_stereo.cpp), [failure injection](../../tests/test_tracker_failure.cpp) | Known-rig association, shared IDs, sync rejection and atomic two-camera history exist. Physical timing/calibration, depth and stereo noise qualification remain open. |
 | [V-TRACK](../spec/requirements/vision/feature-tracks.md) | Partial | [Image/feature identities](../../include/formal_gvins/vision/observation.hpp), `OrbTracker::process/reset`; [tracker tests](../../tests/test_tracker.cpp) | Review all three children plus composed admission/association/consumption sequences. Frontend continuity is only part of this parent. |
-| [V-OBSERVATION](../spec/requirements/vision/observation-admission.md) | Partial | [ImageIdentity/FeatureObservation](../../include/formal_gvins/vision/observation.hpp), [TrackedImage](../../include/formal_gvins/vision/tracker.hpp); [tests](../../tests/test_tracker.cpp) | Frontend identity, coordinate-domain and complete-set lifecycle only; observation-store conflict handling and cross-camera admission have no implementation. |
+| [V-OBSERVATION](../spec/requirements/vision/observation-admission.md) | Partial | [ImageIdentity/FeatureObservation](../../include/formal_gvins/vision/observation.hpp), [TrackedImage](../../include/formal_gvins/vision/tracker.hpp); [tests](../../tests/test_tracker.cpp) | Frontend identity, coordinate-domain and complete-set lifecycle only; stereo supplies cross-camera identity, while the estimator observation-store admission/consumption boundary remains absent. |
 | [V-ASSOCIATION](../spec/requirements/vision/track-association.md) | Planned | No local track-history/clone component. | Implement stable time/clone links, capacity and cross-owner lifetime after runtime profile review. |
 | [V-CONSUMPTION](../spec/requirements/vision/observation-consumption.md) | Planned | No estimator consumption ledger/transaction. | Implement once-only records and complete correction/cache/ledger publication; exercise failed/retried updates. |
 
@@ -100,7 +101,7 @@ commands, profile limits and distinct proof obligations.
 | [M-STATE](../spec/requirements/msckf/state.md) | Partial | State layout/admission and FEJ storage in `msckf/state.hpp`; native state tests. | Initializer/physical priors and exact PSD justification remain external; numerical checks do not establish them. |
 | [M-PROPAGATE](../spec/requirements/msckf/propagation.md) | Partial | Interval arithmetic and nominal/joint prediction in `msckf/imu.hpp` and `msckf/prediction.hpp`; native and independent-reference tests. | Raw buffer/coverage integration, exact source/convention proof, uniform rounding bounds and stochastic model qualification remain. |
 | [M-CLONE](../spec/requirements/msckf/clones.md) | Partial | `augment_clone` / `remove_clone` in `msckf/clones.hpp`; complete duplication/selection and composition tests. | Observation retirement/session identity remains a caller obligation; exact PSD/selection proofs remain. |
-| [M-VISUAL](../spec/requirements/msckf/visual-geometry.md) | Partial | Raw projection, distortion, residual and frozen Jacobians in `msckf/camera.hpp`; finite-difference/gauge reference tests. | Pointwise inverse, triangulation/refinement and assembled feature constraints are deferred. Camera/noise qualification and exact derivatives remain. |
+| [M-VISUAL](../spec/requirements/msckf/visual-geometry.md) | Partial | Raw projection, distortion, residual and frozen Jacobians in `msckf/camera.hpp`; finite-difference/gauge reference tests. | Pointwise inverse is implemented under M-UNPROJECT; triangulation/refinement and assembled feature constraints are deferred. Camera/noise qualification and exact derivatives remain. |
 | [M-UNPROJECT](../spec/requirements/msckf/camera-unprojection.md) | Present | [Camera inverse](../../include/formal_gvins/camera/radtan.hpp); [known-ray and failure tests](../../tests/test_camera_inverse.cpp) | Calibrated inverse-domain qualification; no uniform floating-point proof. |
 | [M-CONSTRAINT](../spec/requirements/msckf/constraints.md) | Planned | No assembled feature-update pipeline; whitening/QR/nullspace primitives exist. | Bind rank/conditioning/gate/compression choices; verify joint transforms and statistical premises. |
 | [M-CORRECT](../spec/requirements/msckf/correction.md) | Partial | Generic `correct` in `msckf/correction.hpp`; joint Joseph, all-pose Exp injection and identity reset; native/oracle checks. | Feature constraints/consumption integration, exact identities, uniform numerical bounds and reset statistical qualification remain. |
