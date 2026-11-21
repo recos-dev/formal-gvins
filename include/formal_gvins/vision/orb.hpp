@@ -18,6 +18,21 @@
 namespace formal_gvins::vision
 {
 
+struct LocalizationOptions
+{
+    int window_radius = 5;
+    int iterations = 20;
+    double epsilon = 0.001;            // Pyramid pixels; a stopping tolerance, not an error bound.
+    double maximum_displacement = 2.0; // Original-image pixels, at every level.
+    double minimum_eigenvalue = 1e-4;  // OpenCV normalized gradient measure.
+    double maximum_condition = 100;
+};
+
+struct LocalizationStats
+{
+    std::size_t detected = 0, support_rejected = 0, displacement_rejected = 0, quality_rejected = 0;
+};
+
 struct OrbOptions
 {
     Execution execution = Execution::cpu;
@@ -25,6 +40,7 @@ struct OrbOptions
     float scale_factor = 1.2F;
     int pyramid_levels = 8;
     int fast_threshold = 20;
+    LocalizationOptions localization;
 };
 
 /** Owning keypoints and corresponding WTA_K=2 descriptor rows. */
@@ -32,7 +48,15 @@ struct OrbFeatures
 {
     std::vector<cv::KeyPoint> keypoints;
     cv::Mat descriptors;
+    LocalizationStats localization;
 };
+
+/** Refine in each octave, check raw-image displacement/support and refresh orientation.
+ * Points are returned in octave order; no descriptors exist yet. Failure preserves both outputs.
+ */
+[[nodiscard]] VisionStatus localize_orb(cv::Mat const & image, cv::Mat const & mask,
+                                        std::vector<cv::KeyPoint> const & detected, OrbOptions const & options,
+                                        std::vector<cv::KeyPoint> & output, LocalizationStats & statistics);
 
 /**
  * Blocking, single-owner image adapter. Do not call concurrently on one instance.
@@ -56,6 +80,7 @@ public:
 private:
     VisionStatus m_status = VisionStatus::invalid_input;
     Execution m_execution = Execution::cpu;
+    OrbOptions m_options;
     cv::Ptr<cv::ORB> m_cpu;
 #if defined(FORMAL_GVINS_FRONTEND_CUDA)
     cv::Ptr<cv::cuda::ORB> m_gpu;

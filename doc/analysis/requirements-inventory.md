@@ -16,9 +16,9 @@ No test or proof execution is claimed by this document.
 |---|---:|
 | Common contracts, including frames | 6 |
 | Reusable mathematics | 24 |
-| Acquisition, frontend and track ownership | 7 |
+| Acquisition, frontend and track ownership | 8 |
 | Local MSCKF parent and children | 10 |
-| Total / Draft / Approved | 47 / 47 / 0 |
+| Total / Draft / Approved | 48 / 48 / 0 |
 
 All original IDs are retained. V-TRACK has three children and SW-MSCKF has eight;
 these links allocate responsibility, not additional completed proofs. Architecture
@@ -28,7 +28,7 @@ and the two development profiles are not counted as requirements.
 operation exists, not that every clause/profile has accepted evidence. **Partial**
 means only part of the boundary is implemented. **Planned** means the responsible
 component/composition is absent. The corresponding counts are 6 policy, 25 present,
-11 partial and 5 planned. Do not interpret these as a completion percentage.
+12 partial and 5 planned. Do not interpret these as a completion percentage.
 
 No local Lean/ESBMC suite or requirement-to-execution registry is present. Imported
 native tests do not transfer formal-eskf's proofs. Current mathematical acceptance
@@ -82,6 +82,7 @@ frontend tests do not establish physical association or navigation accuracy.
 | [V-ACQUISITION](../spec/requirements/vision/acquisition.md) | Partial | [EuRoC reader](../../src/dataset/euroc.cpp); [fixtures](../../tests/test_euroc.cpp) | Parsing/remapping exist; the selected local VINS raw-image/calibration binding needs migration. Exposure/clock/noise qualification, interval binding and truth scoring remain gaps. |
 | [V-EXECUTION](../spec/requirements/vision/frontend-execution.md) | Partial | [Shared result/status](../../include/formal_gvins/vision/tracker.hpp), [OrbExtractor](../../src/vision/orb.cpp), tracker; [ORB](../../tests/test_orb.cpp) and [tracker tests](../../tests/test_tracker.cpp) | Method-neutral output, optional diagnostics and blocking ownership/availability exist; device-error, allocation recovery and deployment timing/overload qualification remain gaps. |
 | [V-ORB](../spec/requirements/vision/orb-frontend.md) | Partial | [Extractor](../../src/vision/orb.cpp), [tracker](../../src/vision/orb_tracker.cpp); [extractor tests](../../tests/test_orb.cpp), [tracker tests](../../tests/test_tracker.cpp) | Raw-image publication and pointwise undistortion for geometric verification are not implemented. Bind epipolar units, qualify the changed noise/benchmark domain, descriptor compatibility and quality/resource bounds. |
+| [V-LOCALIZE](../spec/requirements/vision/feature-localization.md) | Partial | [Localizer](../../src/vision/localization.cpp); [known-corner tests](../../tests/test_localization.cpp) | Real-camera and per-octave noise/accuracy qualification remains open. |
 | [V-TRACK](../spec/requirements/vision/feature-tracks.md) | Partial | [Image/feature identities](../../include/formal_gvins/vision/observation.hpp), `OrbTracker::process/reset`; [tracker tests](../../tests/test_tracker.cpp) | Review all three children plus composed admission/association/consumption sequences. Frontend continuity is only part of this parent. |
 | [V-OBSERVATION](../spec/requirements/vision/observation-admission.md) | Partial | [ImageIdentity/FeatureObservation](../../include/formal_gvins/vision/observation.hpp), [TrackedImage](../../include/formal_gvins/vision/tracker.hpp); [tests](../../tests/test_tracker.cpp) | Frontend identity, coordinate-domain and complete-set lifecycle only; observation-store conflict handling and cross-camera admission have no implementation. |
 | [V-ASSOCIATION](../spec/requirements/vision/track-association.md) | Planned | No local track-history/clone component. | Implement stable time/clone links, capacity and cross-owner lifetime after runtime profile review. |

@@ -12,7 +12,7 @@
 namespace formal_gvins::vision
 {
 
-OrbExtractor::OrbExtractor(OrbOptions const & options) : m_execution(options.execution)
+OrbExtractor::OrbExtractor(OrbOptions const & options) : m_execution(options.execution), m_options(options)
 {
     if ((m_execution != Execution::cpu && m_execution != Execution::cuda) || options.feature_count <= 0 ||
         options.feature_count > 10000 || !std::isfinite(options.scale_factor) || options.scale_factor <= 1.0F ||
@@ -69,24 +69,53 @@ VisionStatus OrbExtractor::extract(cv::Mat const & image, cv::Mat const & mask, 
         OrbFeatures candidate;
         if (m_execution == Execution::cpu)
         {
-            m_cpu->detectAndCompute(image, mask, candidate.keypoints, candidate.descriptors);
+            m_cpu->detect(image, candidate.keypoints, mask);
         }
 #if defined(FORMAL_GVINS_FRONTEND_CUDA)
         else
         {
-            cv::cuda::GpuMat device_image, device_mask, device_keypoints, device_descriptors;
+            cv::cuda::GpuMat device_image, device_mask, device_keypoints;
             device_image.upload(image, *m_stream);
             if (!mask.empty())
             {
                 device_mask.upload(mask, *m_stream);
             }
-            m_gpu->detectAndComputeAsync(device_image, device_mask, device_keypoints, device_descriptors, false,
-                                         *m_stream);
-            device_descriptors.download(candidate.descriptors, *m_stream);
+            m_gpu->detectAsync(device_image, device_keypoints, device_mask, *m_stream);
             m_stream->waitForCompletion();
             m_gpu->convert(device_keypoints, candidate.keypoints);
         }
 #endif
+        auto const status =
+            localize_orb(image, mask, candidate.keypoints, m_options, candidate.keypoints, candidate.localization);
+        if (status != VisionStatus::success)
+        {
+            return status;
+        }
+        if (!candidate.keypoints.empty())
+        {
+            if (m_execution == Execution::cpu)
+            {
+                m_cpu->compute(image, candidate.keypoints, candidate.descriptors);
+            }
+#if defined(FORMAL_GVINS_FRONTEND_CUDA)
+            else
+            {
+                // The provided-keypoint adapter groups by octave and retains per-level
+                // counts internally. A fresh descriptor instance prevents stale counts
+                // when accepted octaves have gaps; the detector keeps its configured levels.
+                auto descriptor =
+                    cv::cuda::ORB::create(m_options.feature_count, m_options.scale_factor, m_options.pyramid_levels, 31,
+                                          0, 2, cv::ORB::HARRIS_SCORE, 31, m_options.fast_threshold, true);
+                cv::cuda::GpuMat device_image(image), device_descriptors;
+                descriptor->compute(device_image, candidate.keypoints, device_descriptors);
+                device_descriptors.download(candidate.descriptors);
+            }
+#endif
+        }
+        if (candidate.descriptors.rows != static_cast<int>(candidate.keypoints.size()))
+        {
+            return VisionStatus::backend_failure;
+        }
         output = std::move(candidate);
         return VisionStatus::success;
     }

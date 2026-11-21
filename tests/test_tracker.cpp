@@ -174,6 +174,9 @@ int main(int argc, char ** argv)
     OrbTracker tracker(options);
     cv::Mat image(480, 752, CV_8UC1);
     random.fill(image, cv::RNG::UNIFORM, 0, 256);
+    // Band-limit the tracking fixture. Independent pixel noise creates unstable
+    // gradient minima rejected by localization, not a geometric continuity oracle.
+    cv::GaussianBlur(image, image, {5, 5}, .8);
     ImageIdentity identity{1, 0, 1, 1000000000, 1, 1};
     TrackedImage output;
     OrbTrackingDiagnostics diagnostics;

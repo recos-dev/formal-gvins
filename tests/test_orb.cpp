@@ -25,6 +25,24 @@ int main(int argc, char ** argv)
     test.expect(features.descriptors.rows == static_cast<int>(features.keypoints.size()) &&
                     features.descriptors.cols == 32 && features.descriptors.type() == CV_8UC1,
                 "ORB", "paired binary descriptors");
+    test.expect(features.localization.detected == features.keypoints.size() + features.localization.support_rejected +
+                                                      features.localization.displacement_rejected +
+                                                      features.localization.quality_rejected,
+                "ORB", "all localized candidates accounted for");
+    for (auto const & key : features.keypoints)
+    {
+        test.expect(std::isfinite(key.pt.x) && std::isfinite(key.pt.y) && key.angle >= 0 && key.angle < 360, "ORB",
+                    "refined coordinates and refreshed orientation");
+    }
+    if (options.execution == Execution::cpu)
+    {
+        auto keys = features.keypoints;
+        cv::Mat descriptors;
+        auto descriptor = cv::ORB::create(1000, 1.2F, 8, 31, 0, 2, cv::ORB::HARRIS_SCORE, 31, 20);
+        descriptor->compute(image, keys, descriptors);
+        test.expect(cv::norm(descriptors, features.descriptors, cv::NORM_INF) == 0, "ORB",
+                    "descriptor is generated at published location/orientation");
+    }
     auto const count = features.keypoints.size();
     std::vector<std::vector<cv::DMatch>> matches;
     test.expect(extractor.match(features, features, matches) == VisionStatus::success && matches.size() == count, "ORB",
@@ -62,6 +80,8 @@ int main(int argc, char ** argv)
                 "blank image produces empty observations");
     test.expect(extractor.extract(image, blank, features) == VisionStatus::success && features.keypoints.empty(), "ORB",
                 "mask excludes all features");
+    test.expect(extractor.extract(image, {}, features) == VisionStatus::success && !features.keypoints.empty(), "ORB",
+                "textured frame after empty/masked frames");
 #if !defined(FORMAL_GVINS_FRONTEND_CUDA)
     options.execution = Execution::cuda;
     OrbExtractor unavailable(options);

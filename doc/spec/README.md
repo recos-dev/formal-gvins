@@ -60,6 +60,7 @@ proofs, native tests and identified executions.
 | ID | Requirement | Status |
 |---|---|---|
 | `V-ORB` | [ORB extraction and temporal association](requirements/vision/orb-frontend.md) | Draft |
+| `V-LOCALIZE` | [Subpixel feature localization](requirements/vision/feature-localization.md) | Draft |
 | `V-TRACK` | [Feature observation identity and ownership](requirements/vision/feature-tracks.md) | Draft |
 | `V-OBSERVATION` | [Observation identity and admission](requirements/vision/observation-admission.md) | Draft |
 | `V-ASSOCIATION` | [Track/clone association and lifetime](requirements/vision/track-association.md) | Draft |

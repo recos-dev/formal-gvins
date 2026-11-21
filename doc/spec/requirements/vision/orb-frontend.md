@@ -119,3 +119,7 @@ performance claims are established by this requirement.
 
 The [development profile](../../profiles/orb-frontend.md) identifies current
 choices and acceptance gaps; it does not approve those values for deployment.
+
+## Decomposition
+
+[V-LOCALIZE](feature-localization.md) owns subpixel localization before description.

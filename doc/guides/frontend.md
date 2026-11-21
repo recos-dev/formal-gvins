@@ -333,3 +333,34 @@ excludes folding in exact arithmetic; the floating-point check is not an interva
 proof. Unit tests independently project known rays in long double, recover them,
 cover the EuRoC image grid and reject folded domains/nonconvergence atomically.
 Image bounds and calibration identity are checked by the frontend.
+
+### Subpixel localization
+
+Extraction now detects first, then refines in each octave before computing a
+descriptor. CPU and CUDA use the same host localization stage: 11x11 gradient
+window, at most 20 one-step `cornerSubPix` calls, 0.001 octave-pixel stopping
+tolerance and at most 2 raw-pixel displacement from detection. Checking each
+sampled center prevents an unobserved iteration path through an excluded mask.
+The library still does not report singularity/reset/termination per point;
+unchanged coordinates are not labeled certified convergence.
+
+The full 32-octave-pixel support is checked against raw image and mask bounds.
+Post-refinement admission requires OpenCV's 3x3 minimum gradient eigenvalue at
+least 1e-4 and eigenvalue ratio at most 100. These are explicit trial limits.
+Orientation is the intensity centroid in a radius-15 disk sampled at the accepted
+location in the same pyramid (`INTER_LINEAR_EXACT` resizing). ORB descriptors
+are then computed with that location, octave and refreshed orientation; OpenCV
+rounds their sampling centers to octave pixels. Subpixel measurement coordinates
+do not imply continuously interpolated binary descriptors.
+
+The CPU path uses provided-keypoint ORB. CUDA uses GPU detection, the same host
+localization and GPU provided-keypoint description/Hamming matching. A fresh
+CUDA descriptor instance prevents stale empty-octave counts in the pinned adapter;
+its creation, transfer and synchronization belong in complete latency. This is
+an explicit mixed CPU/GPU pipeline, never an automatic CPU fallback.
+
+`orb_localization` measures absolute error on independently rendered checker
+intersections with varied angle, contrast and blur, plus failure/support tests.
+Its 0.15 raw-pixel test bound applies to those fixtures; it is not a measured
+real-camera noise covariance. Real-image and per-octave noise qualification
+remains necessary before using observations in an estimator.

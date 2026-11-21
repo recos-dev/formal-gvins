@@ -54,6 +54,7 @@ OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat 
     int const cells = options.grid_columns * options.grid_rows;
     std::vector<int> occupancy(static_cast<std::size_t>(cells), 0);
     OrbFeatures result;
+    result.localization = input.localization;
     for (std::size_t index : order)
     {
         auto const & key = input.keypoints[index];
@@ -266,7 +267,7 @@ VisionStatus OrbTracker::process(ImageIdentity const & identity, cv::Mat const &
         OrbFeatures history;
         if (diagnostics != nullptr)
         {
-            history = {details.features.keypoints, details.features.descriptors.clone()};
+            history = {details.features.keypoints, details.features.descriptors.clone(), details.features.localization};
         }
         else
         {

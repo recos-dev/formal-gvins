@@ -48,6 +48,20 @@ are excluded, with keypoint/descriptor pairing preserved. RANSAC uses normalized
 rays and an explicitly normalized threshold. Benchmark protocol v3 identifies
 this raw-image path separately from earlier remapped-image evidence.
 
+## Raw-image qualification
+
+[V-LOCALIZE](../requirements/vision/feature-localization.md) uses octave-local
+refinement before descriptor computation. Trial settings: window radius 5,
+20 maximum one-step calls, stopping tolerance 0.001 octave pixels, maximum
+raw-pixel displacement 2, minimum gradient eigenvalue 1e-4 and maximum condition
+100. Full 32-octave-pixel support must be inside image/mask. Each iteration's
+sample center is checked. OpenCV does not expose every per-point failure reason;
+these checks and synthetic error tests do not certify convergence or real-image
+noise. Intensity-centroid orientation is refreshed after refinement. CUDA retains
+GPU detection/description/matching with shared host localization. See the
+[implementation guide](../../guides/frontend.md#subpixel-localization) for the
+sampling recipe and scope of the known-corner tests.
+
 ## CPU/CUDA compatibility and acceptance gaps
 
 CPU and CUDA enable the same descriptor-smoothing parameters. This does not
@@ -57,7 +71,7 @@ map descriptors and vocabulary compatibility require separate qualification.
 
 The geometric test is an epipolar screen, not a depth/parallax, pose-observability
 or triangulation certificate. Minimum spacing, cross-scale deduplication, reciprocal
-matching, subpixel refinement and detector fallback are not part of this profile.
+matching and detector fallback are not yet part of this profile.
 Changes require named experiments and renewed acceptance, not implicit adoption.
 
 Before estimator/deployment acceptance, bind pixel-noise covariance in the selected
