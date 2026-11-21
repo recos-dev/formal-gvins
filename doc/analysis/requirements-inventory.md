@@ -6,7 +6,7 @@ The [index](../spec/README.md) owns requirement discovery and Draft status;
 [verification policy](../spec/verification.md) owns evidence acceptance. This
 inventory maps each requirement once to current production symbols/test sources
 and remaining work. It covers bounded linalg, MSCKF mathematical operations, the
-frontend, the EuRoC adapter and reusable runtime storage; each execution record
+frontend, dataset adapters, host publication and reusable runtime storage; each execution record
 must independently bind actual source content/revision.
 No test or proof execution is claimed by this document.
 
@@ -19,7 +19,8 @@ No test or proof execution is claimed by this document.
 | Acquisition, frontend and track ownership | 9 |
 | Local MSCKF parent and children | 10 |
 | Runtime storage | 1 |
-| Total / Draft / Approved | 50 / 50 / 0 |
+| Host recording and publication | 2 |
+| Total / Draft / Approved | 52 / 52 / 0 |
 
 All original IDs are retained. V-TRACK has three children, V-ORB two (stereo is
 conditional), SW-MSCKF eight and M-VISUAL one. These links allocate responsibility,
@@ -29,8 +30,7 @@ counted as requirements.
 **Policy** means a cross-cutting obligation. **Present** means its numerical
 operation exists, not that every clause/profile has accepted evidence. **Partial**
 means only part of the boundary is implemented. **Planned** means the responsible
-component/composition is absent. The corresponding counts are 6 policy, 25 present,
-13 partial and 5 planned. Do not interpret these as a completion percentage.
+component/composition is absent. Do not interpret these labels as a completion percentage.
 
 The local [Lean proof inventory](lean-proofs.md) records exact claims and their
 source correspondence. No local ESBMC suite or requirement-to-execution registry
@@ -140,3 +140,10 @@ including frame/alignment uncertainty, timing, map lifetime and correlated feedb
 Their unsettled models are not invented here or made prerequisites for accepting
 an independent numerical primitive. Requirements and profiles remain Draft until
 explicit owner review; closing documentation gaps does not close evidence gaps.
+
+## Host recording and publication
+
+| Requirement | Implementation scope | Source / test pointers | Review or evidence gap |
+|---|---|---|---|
+| [H-RECORDING](../spec/requirements/host/sensor-recording.md) | Present | [Converter](../../scripts/convert_hkust.py), [recording source](../../src/dataset/recording.cpp), [typed events](../../include/formal_gvins/io/source.hpp); [converter fixtures](../../tests/test_convert_hkust.py), [reader tests](../../tests/test_recording.cpp), [converter-to-publication check](../../tests/test_recording_pipeline.cpp) | Real executions must identify clip/full source and hashes. Parsing and data preservation do not qualify clock alignment, calibration, GNSS quality or estimator use. |
+| [H-PUBLISH](../spec/requirements/host/sensor-publication.md) | Present | [Replay](../../src/io/replay.cpp), [local example](../../examples/replay_sensors.cpp), [deadline/schedule/stop/error tests](../../tests/test_replay.cpp), [converted-data publication](../../tests/test_recording_pipeline.cpp) | Host concurrency and latency measurements are not hard real-time guarantees or Orin qualification. No formal timing/source proof is claimed. |

@@ -84,6 +84,16 @@ the parent. These links allocate requirements, not completed verification.
 The storage contract is independent of sensor timing and execution policy. IMU
 coverage/retirement and cross-thread handoff remain owner/integration obligations.
 
+## Host recording and publication
+
+| ID | Requirement | Status |
+|---|---|---|
+| `H-RECORDING` | [Host sensor recording access](requirements/host/sensor-recording.md) | Draft |
+| `H-PUBLISH` | [Timestamp-paced local sensor publication](requirements/host/sensor-publication.md) | Draft |
+
+These own ROS-free dataset transport and local arrival replay, not qualified
+estimator input, sensor clock alignment or an implemented GNSS fusion model.
+
 ## Local MSCKF capability
 
 | ID | Requirement | Status |
@@ -134,6 +144,9 @@ acceptance gaps. Existing conformance tests do not prove every profile or a
 complete estimator.
 
 ## Architecture proposals
+
+- [Host Sensor Acquisition and Replay](architecture/sensor-replay.md) (Draft):
+  conversion, source interfaces, clock mapping, bounded prefetch and local publication.
 
 - [Application and Component Composition](architecture/application-composition.md)
   (Draft): application ownership, reusable VINS assembly, template boundaries and
