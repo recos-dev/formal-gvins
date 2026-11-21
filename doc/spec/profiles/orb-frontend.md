@@ -23,7 +23,7 @@ basis for experiments, not permission to inherit another estimator's thresholds.
 | Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance; CPU and CUDA enable 7x7 Gaussian smoothing, sigma 2, `BORDER_REFLECT_101`. |
 | Publication | At most 400 features, 8 by 6 grid; stable response ordering, per-cell quotas; unused quotas are not redistributed. |
 | Association | Two-nearest candidates in both directions; strict ratio 0.75 in both and mutual best; reject ties and missing runners-up. |
-| Geometry | Calibrated essential-matrix five-point RANSAC; 0.003 normalized-coordinate threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
+| Geometry | Calibrated essential-matrix five-point RANSAC followed by explicit unit-model Sampson gating; 0.003 normalized-coordinate threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
 | Failure to obtain geometry | Successful frame with no confirmed continuations; assign new IDs, never accept all matches as inliers. |
 | Stream identity | Nonzero session/calibration/noise IDs; increasing image IDs and timestamps after the first image; fixed camera/binding/image size until reset. |
 | Execution | Explicit CPU or CUDA, blocking single-owner calls; CUDA ORB and Hamming matching, other stages on CPU; no automatic fallback. |
@@ -61,6 +61,22 @@ noise. Intensity-centroid orientation is refreshed after refinement. CUDA retain
 GPU detection/description/matching with shared host localization. See the
 [implementation guide](../../guides/frontend.md#subpixel-localization) for the
 sampling recipe and scope of the known-corner tests.
+
+## Temporal degeneracy policy
+
+The normalized Sampson denominator floor is 1e-12 for a unit-Frobenius model.
+Samples require scatter trace above 1e-12 and determinant/trace-squared above
+1e-8. No minimum depth parallax is imposed on temporal association.
+
+E alone is underdetermined under pure rotation. An additional proper-rotation
+screen is selected only when at least eight and 90% of E inliers support it.
+It uses at most 100 three-pair trials (fixed seed 0), unit-ray SVD, second/first
+singular-value ratio above 1e-6 and all-support refinement. Its normalized
+reprojection threshold is the same 0.003. It only removes E inliers; no failed
+E fit is rescued. These are explicit trial settings, not an estimator motion
+classification. [Geometry fixtures](../../../tests/test_epipolar.cpp) cover five
+motion/scene regimes over eight seeds each and known distractors. Physical
+correspondence and depth observability remain separate obligations.
 
 ## CPU/CUDA compatibility and acceptance gaps
 

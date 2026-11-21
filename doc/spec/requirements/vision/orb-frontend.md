@@ -85,6 +85,21 @@ candidates shall be rejected or resolved by the declared selection policy before
 track IDs are assigned. The frontend shall preserve identity according to
 [V-TRACK](feature-tracks.md), not infer identity from descriptor equality.
 
+### Geometric admission
+
+The calibrated profile shall use normalized rays and an explicitly normalized
+Sampson threshold. Normalize E to unit Frobenius norm before applying a declared
+denominator floor. Reject undefined residuals and insufficient/repeated/collinear
+samples. Require both the robust estimator's admission and the explicit residual
+check; do not turn model failure into confirmed track continuations.
+
+A supplementary rotation screen may remove E inliers only when the profile's
+minimum count and support fraction are met. It shall not recover rejected E
+candidates, classify physical motion as zero-translation, or establish depth
+observability. Its estimator, residual, thresholds and work limits must be bound
+by the profile and tested alongside static, rotational, low-parallax, planar and
+general scenes with known distractors.
+
 ### Estimator boundary
 
 The estimator-facing observations shall contain identities, acquisition time,

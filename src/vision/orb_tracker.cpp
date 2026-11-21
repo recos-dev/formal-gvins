@@ -12,24 +12,27 @@
 #include <limits>
 #include <numeric>
 #include <utility>
-#include <opencv2/calib3d.hpp>
 
 namespace formal_gvins::vision
 {
-namespace
+bool OrbTrackingOptions::valid() const
 {
-
-bool valid(OrbTrackingOptions const & options)
-{
+    auto const & options = *this;
     return succeeded(camera::validate_inverse<scalar::StandardMath<double>>(options.camera, options.inverse)) &&
            options.feature_capacity > 0 && options.feature_capacity <= 10000 && options.grid_columns > 0 &&
            options.grid_columns <= 64 && options.grid_rows > 0 && options.grid_rows <= 64 &&
            options.feature_capacity >= options.grid_columns * options.grid_rows &&
            options.orb.feature_count >= options.feature_capacity && std::isfinite(options.ratio) && options.ratio > 0 &&
            options.ratio < 1 && std::isfinite(options.epipolar_threshold) && options.epipolar_threshold > 0 &&
+           std::isfinite(options.minimum_epipolar_denominator) && options.minimum_epipolar_denominator > 0 &&
            std::isfinite(options.confidence) && options.confidence > 0 && options.confidence < 1 &&
-           options.ransac_iterations > 0 && options.ransac_iterations <= 10000;
+           options.ransac_iterations > 0 && options.ransac_iterations <= 10000 && options.rotation_iterations > 0 &&
+           options.rotation_iterations <= 1000 && std::isfinite(options.rotation_support_fraction) &&
+           options.rotation_support_fraction >= 0.8 && options.rotation_support_fraction <= 1;
 }
+
+namespace
+{
 
 OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat const & mask,
                               OrbTrackingOptions const & options)
@@ -78,159 +81,10 @@ OrbFeatures spatial_selection(OrbFeatures const & input, cv::Size size, cv::Mat 
     return result;
 }
 
-bool ratio_candidates(std::vector<std::vector<cv::DMatch>> const & neighbors, std::size_t query_count,
-                      std::size_t train_count, float ratio, std::vector<cv::DMatch> & best, std::size_t & passed)
-{
-    if (neighbors.size() > query_count)
-    {
-        return false;
-    }
-    std::vector<bool> seen(query_count, false);
-    best.resize(query_count);
-    for (auto const & pair : neighbors)
-    {
-        if (pair.empty())
-        {
-            continue;
-        }
-        int const query = pair[0].queryIdx;
-        if (query < 0 || static_cast<std::size_t>(query) >= query_count || seen[static_cast<std::size_t>(query)] ||
-            pair.size() > 2)
-        {
-            return false;
-        }
-        seen[static_cast<std::size_t>(query)] = true;
-        for (auto const & match : pair)
-        {
-            if (match.queryIdx != query || match.trainIdx < 0 ||
-                static_cast<std::size_t>(match.trainIdx) >= train_count || !std::isfinite(match.distance) ||
-                match.distance < 0 || match.distance > 256)
-            {
-                return false;
-            }
-        }
-        if (pair.size() < 2)
-        {
-            continue;
-        }
-        auto const & first = pair[0];
-        auto const & second = pair[1];
-        if (first.trainIdx == second.trainIdx || second.distance < first.distance)
-        {
-            return false;
-        }
-        if (first.distance < ratio * second.distance)
-        {
-            best[static_cast<std::size_t>(query)] = first;
-            ++passed;
-        }
-    }
-    return true;
-}
-
 } /* end anonymous namespace */
 
-VisionStatus reciprocal_matches(std::vector<std::vector<cv::DMatch>> const & forward,
-                                std::vector<std::vector<cv::DMatch>> const & reverse, std::size_t query_count,
-                                std::size_t train_count, float ratio, DescriptorMatches & output)
-{
-    if (query_count > 10000 || train_count > 10000 || !std::isfinite(ratio) || ratio <= 0 || ratio >= 1)
-    {
-        return VisionStatus::invalid_input;
-    }
-    DescriptorMatches candidate;
-    std::vector<cv::DMatch> a, b;
-    if (!ratio_candidates(forward, query_count, train_count, ratio, a, candidate.forward_ratio_passed) ||
-        !ratio_candidates(reverse, train_count, query_count, ratio, b, candidate.reverse_ratio_passed))
-    {
-        return VisionStatus::invalid_input;
-    }
-    for (auto const & match : a)
-    {
-        if (match.trainIdx >= 0 && b[static_cast<std::size_t>(match.trainIdx)].trainIdx == match.queryIdx)
-        {
-            candidate.matches.push_back(match);
-        }
-    }
-    output = std::move(candidate);
-    return VisionStatus::success;
-}
-
-VisionStatus verify_matches(OrbFeatures const & previous, OrbFeatures const & current,
-                            std::vector<std::vector<cv::DMatch>> const & neighbors,
-                            std::vector<std::vector<cv::DMatch>> const & reverse, OrbTrackingOptions const & options,
-                            OrbMatchResult & output)
-{
-    if (!valid(options))
-    {
-        return VisionStatus::invalid_input;
-    }
-    OrbMatchResult candidate;
-    auto const status = reciprocal_matches(neighbors, reverse, previous.keypoints.size(), current.keypoints.size(),
-                                           options.ratio, candidate.descriptors);
-    if (status != VisionStatus::success)
-    {
-        return status;
-    }
-    std::vector<cv::DMatch> unique;
-    std::vector<cv::Point2f> points_previous, points_current;
-    for (auto const & match : candidate.descriptors.matches)
-    {
-        auto const query = static_cast<std::size_t>(match.queryIdx);
-        auto const train = static_cast<std::size_t>(match.trainIdx);
-        auto const p = previous.keypoints[query].pt;
-        auto const q = current.keypoints[train].pt;
-        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(q.x) || !std::isfinite(q.y))
-        {
-            return VisionStatus::invalid_input;
-        }
-        camera::Bearing<double> a, b;
-        if (!succeeded(camera::unproject<scalar::StandardMath<double>>(p.x, p.y, options.camera, options.inverse, a)) ||
-            !succeeded(camera::unproject<scalar::StandardMath<double>>(q.x, q.y, options.camera, options.inverse, b)))
-        {
-            continue;
-        }
-        unique.push_back(match);
-        points_previous.emplace_back(a.x, a.y);
-        points_current.emplace_back(b.x, b.y);
-    }
-    try
-    {
-        // Known intrinsics constrain the model to E = [t]_x R. Require more
-        // candidates than the five-point minimal sample before confirming tracks.
-        if (unique.size() >= 8U)
-        {
-            cv::Mat mask;
-            cv::Mat const E =
-                cv::findEssentialMat(points_previous, points_current, cv::Matx33d::eye(), cv::RANSAC,
-                                     options.confidence, options.epipolar_threshold, options.ransac_iterations, mask);
-            if (E.rows == 3 && E.cols == 3 && cv::checkRange(E) && cv::norm(E) > 0 && mask.total() == unique.size())
-            {
-                for (std::size_t index = 0; index < unique.size(); ++index)
-                {
-                    if (mask.ptr<unsigned char>()[index] != 0)
-                    {
-                        candidate.inliers.push_back(unique[index]);
-                    }
-                }
-                candidate.geometry_valid = candidate.inliers.size() >= 8U;
-                if (!candidate.geometry_valid)
-                {
-                    candidate.inliers.clear();
-                }
-            }
-        }
-        output = std::move(candidate);
-        return VisionStatus::success;
-    }
-    catch (cv::Exception const &)
-    {
-        return VisionStatus::backend_failure;
-    }
-}
-
 OrbTracker::OrbTracker(OrbTrackingOptions const & options)
-    : m_options(options), m_extractor(options.orb), m_valid(valid(options))
+    : m_options(options), m_extractor(options.orb), m_valid(options.valid())
 {
 }
 

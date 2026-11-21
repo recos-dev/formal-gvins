@@ -130,3 +130,5 @@ including frame/alignment uncertainty, timing, map lifetime and correlated feedb
 Their unsettled models are not invented here or made prerequisites for accepting
 an independent numerical primitive. Requirements and profiles remain Draft until
 explicit owner review; closing documentation gaps does not close evidence gaps.
+
+Temporal geometry is also exercised by [known-scene fixtures](../../tests/test_epipolar.cpp) against [the production matcher](../../src/vision/orb_matching.cpp); these checks do not establish physical feature identity.

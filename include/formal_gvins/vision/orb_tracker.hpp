@@ -25,9 +25,14 @@ struct OrbTrackingOptions
     int grid_columns = 8;
     int grid_rows = 6;
     float ratio = 0.75F;
-    double epipolar_threshold = 0.003; // Normalized coordinates, not pixels.
+    double epipolar_threshold = 0.003;           // Normalized coordinates, not pixels.
+    double minimum_epipolar_denominator = 1e-12; // E has unit Frobenius norm.
     double confidence = 0.99;
     int ransac_iterations = 2000;
+    int rotation_iterations = 100;
+    double rotation_support_fraction = 0.9; // Additional screen only when E inliers support rotation.
+
+    [[nodiscard]] bool valid() const;
 };
 
 struct DescriptorMatches
@@ -48,6 +53,8 @@ struct OrbMatchResult
 {
     std::vector<cv::DMatch> inliers; // query=previous, train=current
     DescriptorMatches descriptors;
+    std::size_t inverse_rejected = 0;
+    bool rotation_checked = false;
     bool geometry_valid = false;
 };
 

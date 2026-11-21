@@ -110,7 +110,7 @@ matches. There is no GUI or display-server dependency.
 
 The profile publishes at most 400 observations over an 8x6 grid, selected from
 up to 1000 ORB candidates. Empty cells do not donate their quota. Matching uses
-a strict 0.75 two-neighbor ratio, deterministic one-to-one conflict resolution,
+strict 0.75 two-neighbor ratios in both directions, mutual-best selection,
 and a calibrated essential-matrix check using OpenCV's five-point RANSAC
 (0.003 normalized-coordinate threshold, 0.99 confidence, at most 2000 iterations). It requires at
 least eight unique candidates and eight accepted inliers. The tracker requires
@@ -374,3 +374,27 @@ and a missing second candidate reject. A collision is resolved by mutual best,
 not a greedy distance sort. Malformed indices, repeated queries or invalid
 distances fail without publishing a partial result. This gives one-to-one
 associations before geometry; no absolute Hamming cutoff is enabled.
+
+### Temporal geometry
+
+Both views use calibrated normalized rays. Five-point essential RANSAC proposes
+a model; it must have sufficient two-dimensional sample spread and at least
+eight supporting correspondences. The model is normalized to unit Frobenius
+norm and every accepted RANSAC inlier must also satisfy the explicit squared
+Sampson residual at threshold 0.003. Denominators at or below 1e-12 reject.
+Sample spread requires scatter trace above 1e-12 and determinant/trace-squared
+above 1e-8; this detects repeated/collinear samples, not insufficient depth parallax.
+
+For rotation-dominated data, E alone can fit distractors because translation
+direction is underdetermined. A supplementary proper-rotation fit uses up to
+100 deterministic three-pair trials, unit-ray SVD and all-support refinement.
+Only when at least eight and 90% of E's inliers also support that rotation is
+the normalized reprojection-distance screen applied, at the same threshold.
+It only removes E inliers; it never rescues failed E geometry or establishes
+zero translation/observable depth. The rank check requires the second singular
+value above 1e-6 of the first.
+
+`orb_geometry` checks known correspondences with distractors across static, pure
+rotation, small baseline, planar and general scenes, over eight seeds each.
+This exercises a declared degeneracy policy; epipolar/rotation agreement still
+does not certify physical feature identity or triangulation validity.
