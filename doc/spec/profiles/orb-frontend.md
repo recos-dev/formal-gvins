@@ -15,8 +15,11 @@ and the [EuRoC frontend executable](../../../examples/euroc_frontend.cpp).
 OpenCV and contrib are pinned by their Git submodules; CMake requests exactly
 4.13.0. [CPU](../../../configs/opencv-cpu.cmake) and
 [CUDA](../../../configs/opencv-cuda.cmake) build settings are separate bindings.
-The [reference comparison](../../analysis/orb-frontend-settings.md) gives the
-basis for experiments, not permission to inherit another estimator's thresholds.
+The [frontend architecture](../architecture/visual-frontend.md) explains the
+algorithms and ownership. The [reference comparison](../../analysis/orb-frontend-settings.md)
+gives the basis for experiments, not permission to inherit another estimator's
+thresholds. Values below distinguish configurable defaults from fixed recipe
+checks. Neither kind is an accepted physical accuracy bound.
 
 | Setting | Current development value/policy |
 |---|---|
@@ -25,7 +28,7 @@ basis for experiments, not permission to inherit another estimator's thresholds.
 | Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance; CPU and CUDA enable 7x7 Gaussian smoothing, sigma 2, `BORDER_REFLECT_101`. |
 | Publication | At most 400 features, 8 by 6 grid; verified continuing tracks first by age/ID, new candidates by response/index; 8 raw-pixel minimum spacing across cells/scales; per-cell quotas are not redistributed. |
 | Association | Two-nearest candidates in both directions; strict ratio 0.75 in both and mutual best; reject ties and missing runners-up. |
-| Geometry | Calibrated essential-matrix five-point RANSAC followed by explicit unit-model Sampson gating; 0.003 normalized-coordinate threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
+| Geometry | Calibrated essential-matrix five-point RANSAC followed by explicit unit-model Sampson gating and a conditional rotation screen, bound below. |
 | Failure to obtain geometry | Successful frame with no confirmed continuations; assign new IDs, never accept all matches as inliers. |
 | Stream identity | Nonzero session/calibration/noise IDs; increasing image IDs and timestamps after the first image; fixed camera/binding/image size until reset. |
 | Execution | Explicit CPU or CUDA, blocking single-owner calls; CUDA ORB and Hamming matching, other stages on CPU; no automatic fallback. |
@@ -42,40 +45,84 @@ OpenCV exceptions are contained, while host allocation exceptions may propagate.
 
 The tracker publishes raw pixels and their derived normalized rays. Pointwise
 inverse semantics are defined by [M-UNPROJECT](../requirements/msckf/camera-unprojection.md).
-The current double-precision inverse uses radius 2, 20 evaluations, maximum
-component step 0.5, minimum slope 1e-4 and forward residual 1e-8 pixels.
-These trial values are checked against known rays and the EuRoC image domain;
-they are not a deployment accuracy or interval certificate. Failed inverses
-are excluded, with keypoint/descriptor pairing preserved. RANSAC uses normalized
-rays and an explicitly normalized threshold. Benchmark protocol v4 identifies
-this raw-image path separately from earlier remapped-image evidence.
+Failed inverses are excluded, with keypoint/descriptor pairing preserved. RANSAC
+uses normalized rays and an explicitly normalized threshold. Benchmark protocol
+v4 identifies this raw-image path separately from earlier remapped-image evidence.
+
+### Camera inverse
+
+The current `camera::unproject` uses double-precision Newton root finding with an
+analytic 2x2 Jacobian and initial guess `((u-cx)/fx,(v-cy)/fy)`. It does not call
+OpenCV's inverse. The [architecture](../architecture/visual-frontend.md#camera-inverse)
+defines the update; forward and inverse operations share `camera::distort`.
+
+| Parameter | Default / unit | Meaning |
+|---|---|---|
+| `radius` | 2, normalized coordinates | Admitted disk; an iterate outside it fails. |
+| `iterations` | 20 evaluations; supported cap 32 | Includes residual checks, not 20 updates followed by an extra check. Exhaustion fails. |
+| `maximum_step` | 0.5 per normalized component | A larger Newton step fails; it is not clipped. |
+| `minimum_slope` | 1e-4 | Positive-Jacobian domain bound and local diagonal check; local determinant must exceed its square. |
+| `residual_px` | 1e-8 raw pixels per axis | Infinity-norm forward-reprojection tolerance; not localization accuracy or measurement noise. |
+
+The positive-Jacobian disk check is conservative and may reject a calibration
+whose smaller image domain could be usable. Known-ray/domain tests do not prove
+a uniform floating-point inverse error or physical calibration accuracy. No
+line-search, domain-clamping or best-effort last-iterate fallback is selected.
 
 ## Raw-image qualification
 
-[V-LOCALIZE](../requirements/vision/feature-localization.md) uses octave-local
-refinement before descriptor computation. Trial settings: window radius 5,
-20 maximum one-step calls, stopping tolerance 0.001 octave pixels, maximum
-raw-pixel displacement 2, minimum gradient eigenvalue 1e-4 and maximum condition
-100. Full 32-octave-pixel support must be inside image/mask. Each iteration's
-sample center is checked. OpenCV does not expose every per-point failure reason;
-these checks and synthetic error tests do not certify convergence or real-image
-noise. Intensity-centroid orientation is refreshed after refinement. CUDA retains
-GPU detection/description/matching with shared host localization. See the
-[implementation guide](../../guides/frontend.md#subpixel-localization) for the
-sampling recipe and scope of the known-corner tests.
+[V-LOCALIZE](../requirements/vision/feature-localization.md) uses OpenCV
+`cornerSubPix` at the detected octave before descriptor computation. CPU/CUDA
+share this host operation. The configurable `LocalizationOptions` defaults are:
+
+| Parameter | Default / unit |
+|---|---|
+| `window_radius` | 5 octave pixels; an 11x11 window |
+| `iterations` | At most 20 one-iteration library calls |
+| `epsilon` | 0.001 octave pixels between returned positions; not an error bound |
+| `maximum_displacement` | 2 raw pixels from the original detection at every step |
+| `minimum_eigenvalue` | 1e-4 in OpenCV's normalized gradient measure |
+| `maximum_condition` | Larger/smaller gradient eigenvalue at most 100 |
+
+The fixed recipe requires full 32-octave-pixel support inside image/mask at each
+sample center. The pyramid uses `INTER_LINEAR_EXACT`; gradient quality uses
+`cornerEigenValsAndVecs` with block/aperture 3 and reflected borders. Orientation
+is recomputed from a radius-15 intensity-centroid disk, sampled by `getRectSubPix`
+in a 31x31 patch at the accepted location. Provided-keypoint ORB then uses the
+accepted location, octave and refreshed orientation. Descriptor sampling centers
+are rounded to octave pixels; a subpixel observation does not imply continuously
+interpolated binary descriptors. A fresh CUDA descriptor instance avoids retained
+per-level counts when accepted octaves have gaps; setup belongs in total latency.
+
+OpenCV does not expose every per-point failure reason. Iteration exhaustion or an
+unchanged returned location is not a convergence certificate; admission depends
+on the observable support/displacement/gradient checks. Synthetic corner tests
+do not qualify real-camera noise or all pyramid levels/image regions.
 
 ## Temporal degeneracy policy
 
-The normalized Sampson denominator floor is 1e-12 for a unit-Frobenius model.
-Samples require scatter trace above 1e-12 and determinant/trace-squared above
-1e-8. No minimum depth parallax is imposed on temporal association.
+The configurable `OrbTrackingOptions` defaults are:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `epipolar_threshold` | 0.003 normalized-image units | E-RANSAC threshold, explicit Sampson-distance threshold and supplementary rotation reprojection threshold; not raw pixels. |
+| `confidence` | 0.99 | RANSAC sampling target, not the probability that a particular match is correct. |
+| `ransac_iterations` | 2000 | Upper iteration limit for E estimation. |
+| `minimum_epipolar_denominator` | 1e-12 | Applied after unit-Frobenius E normalization. |
+| `rotation_iterations` | 100 | Maximum three-pair rotation trials. |
+| `rotation_support_fraction` | 0.9 | Required fraction of E inliers supporting the supplementary rotation screen. |
+
+Fixed checks require at least eight unique candidates and eight final inliers,
+scatter trace above 1e-12 and determinant/trace-squared above 1e-8. These checks
+reject repeated/collinear data; no minimum depth parallax is imposed on temporal
+association. There is no IMU-guided search or motion prior.
 
 E alone is underdetermined under pure rotation. An additional proper-rotation
-screen is selected only when at least eight and 90% of E inliers support it.
-It uses at most 100 three-pair trials (fixed seed 0), unit-ray SVD, second/first
-singular-value ratio above 1e-6 and all-support refinement. Its normalized
-reprojection threshold is the same 0.003. It only removes E inliers; no failed
-E fit is rescued. These are explicit trial settings, not an estimator motion
+screen is selected only when at least eight E inliers and the configured support
+fraction agree with it.
+It uses the configured three-pair trials (fixed seed 0), unit-ray SVD, second/first
+singular-value ratio above 1e-6 and all-support refinement. It only removes E
+inliers; no failed E fit is rescued. These are explicit trial settings, not an estimator motion
 classification. [Geometry fixtures](../../../tests/test_epipolar.cpp) cover five
 motion/scene regimes over eight seeds each and known distractors. Physical
 correspondence and depth observability remain separate obligations.

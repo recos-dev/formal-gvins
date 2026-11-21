@@ -125,8 +125,9 @@ and consistency evaluation before selecting deployment defaults.
 
 The [ORB profile](../spec/profiles/orb-frontend.md) owns the complete current
 parameter binding and failure policy. This survey does not approve Draft
-requirements. The [frontend guide](../guides/frontend.md) owns build/replay commands; experimental
-outputs stay outside versioned documentation.
+requirements. The [architecture](../spec/architecture/visual-frontend.md) explains
+the implemented pipeline; the [frontend guide](../guides/frontend.md) owns
+build/replay commands. Experimental outputs stay outside versioned documentation.
 
 [ov-config]: https://github.com/rpng/open_vins/blob/69488123ed9362dd44b6f28e7f4680abbff1442b/config/euroc_mav/estimator_config.yaml
 [ov-grid]: https://github.com/rpng/open_vins/blob/69488123ed9362dd44b6f28e7f4680abbff1442b/ov_core/src/track/Grider_FAST.h#L73

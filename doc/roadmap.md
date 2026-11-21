@@ -1,8 +1,11 @@
 # Development work list
 
-This list tracks planned work. It does not approve requirements or claim completed
-verification. Existing frontend decisions are recorded in the
-[ORB reference comparison](analysis/orb-frontend-settings.md).
+This list tracks implementation boundaries and remaining work. It does not
+approve requirements or claim completed verification. The
+[frontend architecture](spec/architecture/visual-frontend.md) explains the
+implemented mono/stereo pipeline; its [profile](spec/profiles/orb-frontend.md)
+binds settings and the [reference comparison](analysis/orb-frontend-settings.md)
+records the experiment basis.
 
 ## MSCKF mathematics implementation sequence
 
@@ -18,11 +21,12 @@ selected Hamilton/FEJ formulation. Callers supply valid initial states, covered 
 intervals and observations associated with the requested clones. Synthetic tests
 exercise those numerical operations directly.
 
-Triangulation, feature-error elimination, measurement compression, feature-history
-management, initialization policy, frontend changes, replay,
-event scheduling and real-time integration are deferred work, not deliverables
-of this mathematical implementation sequence. The broader local VINS milestone
-remains recorded below; it does not expand the current scope.
+Triangulation, feature-error elimination, measurement compression, estimator
+feature-history management, initialization, integrated VINS replay, event
+scheduling and real-time integration remain deferred. Standalone mono/stereo
+frontends and their replay/benchmark tools are implemented separately; they do
+not complete those estimator tasks. The broader local VINS milestone remains
+recorded below.
 
 The [MSCKF formulation](spec/architecture/msckf-formulation.md) and its
 [requirement allocation](spec/requirements/software/local-vio.md) own the model.
@@ -55,7 +59,7 @@ state/layout work. Formula verification continues with each numerical module.
 | 5 / VINS-04.3 | FEJ covariance propagation / M-PROPAGATE, M-FEJ. | Implement B1/B2, full Psi and Gd*(Qc/h)*Gd^T with the selected frozen references. Verify ordinary derivatives separately from FEJ, all bias/noise blocks, density/time scaling, source-order translation and IMU/clone cross-covariances. Test segment recurrence without requiring unsplit-Qd equality; publish mean/covariance/time/FEJ together. |
 | 6 / VINS-09 | Joint correction, injection and reset / M-CORRECT. | Use an SPD solve and Joseph covariance update; inject all IMU/clone means with Hamilton Exp and apply the selected identity reset. Verify cross-blocks, unchanged first estimates, correction limits and failure atomicity. Compare exact Joseph identities and physical-reset discrepancy separately; do not import the formal-eskf reset behavior. Compose production propagation, cloning and correction in synthetic numerical tests using supplied states and observations, without adding an event loop. |
 | 7 / VINS-05 | Clone augmentation and removal / M-CLONE. | Implement deterministic pose duplication and retained-coordinate selection, including nominal/FEJ identities and full cross-covariance. Test middle-clone removal, capacity boundaries and valid singular PSD covariance. The low-level removal contract requires the caller to discharge pending-observation ownership. |
-| 8 / VINS-07.1 | Camera model and visual Jacobians / M-VISUAL, M-FEJ. | Implement radial-tangential raw-pixel projection, extrinsics/lever arm, residual and current/frozen Jacobians. Compare derivatives independently; test off-axis, zero distortion, invalid depth, camera domains and the selected fully frozen policy. Pointwise inversion belongs to the deferred triangulation path. |
+| 8 / VINS-07.1 | Camera model and visual Jacobians / M-VISUAL, M-FEJ. | Implement radial-tangential raw-pixel projection, extrinsics/lever arm, residual and current/frozen Jacobians. Compare derivatives independently; test off-axis, zero distortion, invalid depth, camera domains and the selected fully frozen policy. Pointwise inversion is implemented separately under M-UNPROJECT for frontend geometry; its use does not implement triangulation. |
 
 Measurement QR compression is an optional efficiency step, deferred from this
 mathematical scope. Triangulation and feature-error nullspace projection are also deferred.
@@ -138,7 +142,7 @@ focused equation and numerical composition checks in the mathematical actions.
 | VINS-06 | Feature-history ownership / V-TRACK, M-LIFECYCLE. | Bind observations to stable clone/image/camera IDs and retain once-only consumption/retirement records. Test lost/continuing tracks, reused slots, pending clone retirement, history/batch capacity and failed/retried updates. Frontend descriptor ownership stays separate. |
 | VINS-10.1 | C++ filter interface and synthetic integration / SW-MSCKF, M-LIFECYCLE. | Connect state validation, propagation, cloning, track selection, constraints, correction and retirement through direct calls. Begin from explicitly supplied valid states. Known synthetic IMU/pixel sequences exercise real production functions; test no-update, degeneracy, delayed/duplicate input and failure transactions. No dataset truth enters the estimator API. |
 | VINS-03 | Stationary-start initializer / M-STATE. | Implement the selected IMU/visual-window admission, gravity/yaw convention, bias priors, coupled initial covariance and propagation from the initialization timestamp. Test false stationarity, insufficient tracks, unavailable coverage and invalid priors with synthetic fixtures; empirical threshold qualification remains separate. |
-| VINS-11.1 | Raw-image EuRoC/frontend migration / V-ACQUISITION, V-ORB. | Implemented for the standalone mono/stereo frontends: raw images/pixels, bounded camera inverse, declared geometric units and synchronized known-rig association. Preserve these bindings when connecting the estimator. Real-camera noise, timing and physical matching qualification remain open. |
+| VINS-11.1 | Frontend qualification and estimator binding / V-ACQUISITION, V-ORB, V-LOCALIZE, V-STEREO. | Raw mono/stereo processing, bounded camera inverse, localization, reciprocal/geometry checks, selection and lifecycle are implemented. Qualify track persistence and localization rejection by stage/octave, held-out false matches, raw-pixel noise and stereo timing/calibration. Measure host localization cost before changing its recipe. Preserve IDs/coordinate bindings when connecting the estimator; reference tests and frontend replay alone do not accept these physical/resource claims. |
 | VINS-11.2 | EuRoC VINS replay and trajectory scoring / SW-MSCKF. | Run the C++ filter and initializer with actual frontend observations. Export identified trajectory, update counts, validity/rejection/failure reasons and timing. Score ATE/RPE and attitude/velocity errors with declared timestamp/frame alignment and no free scale fitting; ground truth is evaluation-only. |
 | VINS-12 | Integrated regression and consistency qualification / SW-MSCKF. | Extend synthetic sequences with controlled noise and repeated FEJ updates; evaluate observable-subspace or explicitly anchored NEES. Compare IMU-only and VINS, weak geometry/lost vision, and held-out EuRoC data. Select justified accuracy/coverage/numerical thresholds before pinning a baseline; retain failed cases rather than relaxing bounds to pass. |
 | VINS-RT | Timing, CPU headroom and real-time execution binding / B-01, M-LIFECYCLE. | Aggregate per-module measurements, test peak capacities and sensor-paced execution, and identify the camera/CPU/GPU/I/O bottleneck. Select budgets, queue/overload policy and output cadence from evidence; test deadlines, backlog and state age. Separate host and Orin qualification; measured maxima are not WCET proofs. |

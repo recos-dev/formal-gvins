@@ -67,12 +67,11 @@ options and state. A consumer does not need an extractor API or descriptors.
 |---|---|
 | Application entry and deployment wiring | Application/example `.cpp`, selecting and constructing library components. |
 | Reusable typed VINS orchestration | Proposed `include/formal_gvins/vins.hpp`, with declarations followed by necessary template definitions. It belongs to host composition, not the image-independent numerical core. |
-| ORB extraction, localization and descriptor operations | Existing `include/formal_gvins/vision/orb.hpp` declares the component; `src/vision/orb.cpp` contains non-template implementations and private helpers. |
-| ORB matching, spatial selection and tracking | `include/formal_gvins/vision/orb_tracker.hpp` and `src/vision/orb_tracker.cpp`; extend the cohesive module before splitting private steps into separate files. Stereo remains proposed. |
+| Image processing and tracking | Public components under `include/formal_gvins/vision/`, compiled implementations under `src/vision/`; [frontend architecture](visual-frontend.md) allocates ORB extraction/localization, association, selection and implemented mono/stereo ownership. Keep template-independent processing out of headers. |
 | Shared tracker result/status | `include/formal_gvins/vision/tracker.hpp`; method-independent host batch, without OpenCV dependencies. |
 | Observation records | `include/formal_gvins/vision/observation.hpp`; numeric identities/coordinates for bounded consumers, independent of image-library and dynamic containers. |
 | Numerical state and lifecycle | `include/formal_gvins/msckf/`; state/math templates already exist. The complete filter runtime remains proposed. |
-| Projection, inverse camera and triangulation | Existing `include/formal_gvins/msckf/camera.hpp` and proposed `include/formal_gvins/msckf/triangulation.hpp`; backend/capacity-dependent mathematics remains in headers. |
+| Projection and inverse camera | Shared distortion/inverse in `include/formal_gvins/camera/radtan.hpp`; MSCKF projection/Jacobians in `include/formal_gvins/msckf/camera.hpp`. Scalar/backend-dependent mathematics remains in headers. Triangulation remains a proposed numerical component. |
 
 The ordinary frontend methods can be compiled into a static library even when
 called from a templated VINS pipeline. Their declarations satisfy compilation;

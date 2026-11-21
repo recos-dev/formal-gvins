@@ -46,7 +46,7 @@ before using measurements to accept a claim. Tests can guide a proposed bound;
 do not choose a tolerance after seeing a failure and call it unchanged acceptance.
 Maintain distinct rounding, approximation and math-library assumptions.
 
-The planned [module benchmarks](../roadmap.md#b-01-per-module-unit-benchmarks)
+The [module benchmarks](../roadmap.md#b-01-per-module-unit-benchmarks)
 record workload, warmup, sample count, median/P95/maximum observed latency and
 failures, together with an appropriate reference/error metric. CPU/GPU comparisons
 need matched algorithm settings and transfer/synchronization costs. RMSE requires

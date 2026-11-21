@@ -20,6 +20,8 @@ geometric rejection is also demonstrated by
 This requirement does not import its source, thresholds or quaternion convention.
 The [development profile](../../profiles/orb-frontend.md) binds the implemented
 raw-image pipeline and its current qualification limits.
+The [frontend architecture](../../architecture/visual-frontend.md) explains
+operation order, library/project responsibilities and the estimator boundary.
 
 ## Required behavior
 
@@ -157,7 +159,9 @@ constraints need separate contracts; local matching does not establish them.
 
 Check keypoint/descriptor pairing after selection, count/mask bounds, empty and
 invalid inputs, descriptor incompatibility, insufficient neighbors, distance ties,
-reciprocal rejection, optional distance/scale gates, one-to-one conflicts and geometry failure.
+reciprocal rejection, any enabled distance/scale gates, one-to-one conflicts and
+geometry failure. Optional gates absent from the selected implementation/profile
+shall not be counted as implemented or verified.
 Verify that rejected matches do not inherit track IDs and that retained
 descriptors survive live-buffer reuse.
 For the raw-image profile, verify raw/bearing pairing, calibration identity,

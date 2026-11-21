@@ -71,7 +71,9 @@ proofs, native tests and identified executions.
 
 V-TRACK retains its composition scope and allocates identity, association and
 consumption to three children. V-ORB uses that boundary; it is not the parent of
-the estimator's observation store.
+the estimator's observation store. V-ORB allocates localization and conditional
+stereo association to V-LOCALIZE and V-STEREO; temporal association remains in
+the parent. These links allocate requirements, not completed verification.
 
 ## Local MSCKF capability
 
@@ -127,6 +129,8 @@ complete estimator.
 - [Application and Component Composition](architecture/application-composition.md)
   (Draft): application ownership, reusable VINS assembly, template boundaries and
   `.hpp`/`.cpp` responsibilities under C-CPP-SUBSET.
+- [Visual Frontend](architecture/visual-frontend.md) (Draft): raw-image processing,
+  library/project responsibilities, mono/stereo transactions and estimator boundary.
 - [MSCKF Formulation](architecture/msckf-formulation.md) (Draft): state and frame
   conventions, IMU-pose clones, visual constraints, joint updates and proof scope.
 

@@ -76,37 +76,18 @@ A replacement object needs a fresh session if its counters could overlap old IDs
 Numerical calibration is fixed at construction; changing a binding token alone
 does not change the camera model.
 
-Images are raw `CV_8UC1` with an optional same-size validity mask. Published
-observations retain raw pixels plus derived normalized rays `[x,y,1]`; those rays
-are not additional measurements. `camera/radtan.hpp` supplies the bounded
-pointwise inverse shared with forward projection. `verify_temporal` reuses admitted
-rays; it does not repeat inversion. Inverse-domain checks and calibration binding
-belong to the producer. No image is resampled to create pinhole observations.
-
-Temporal association uses strict reciprocal 2-NN Hamming ratios, calibrated E
-RANSAC and explicit normalized Sampson residuals. An additional rotation screen
-can only remove E inliers under its declared support conditions. Invalid geometry
-never becomes an accept-all fallback. Matching precedes publication selection:
-verified continuations rank first by age/ID, then new candidates by response/index,
-within shared grid quotas and global minimum spacing across cells/scales. Quotas
-are not redistributed. This cannot preserve a point absent from current detection.
+Images are raw `CV_8UC1` with an optional same-size validity mask. Observations
+retain raw pixels plus derived rays `[x,y,1]`, not additional measurements. The
+[frontend architecture](../spec/architecture/visual-frontend.md) explains inverse
+projection, descriptors, temporal geometry, selection and stereo publication.
+The [profile](../spec/profiles/orb-frontend.md) owns settings and qualification gaps.
 
 ### Subpixel localization
 
-Detection is followed by octave-local refinement before description. CPU and CUDA
-share the host `cornerSubPix` recipe: bounded one-step calls, checks at each sampled
-center, raw displacement/support limits, then a gradient-eigenvalue quality check.
-The [profile](../spec/profiles/orb-frontend.md#raw-image-qualification) binds values.
-OpenCV does not report every point's termination reason; an unchanged location
-is not certified convergence.
-
-Orientation is recomputed from a radius-15 intensity-centroid disk sampled by
-`getRectSubPix` at the accepted location in the `INTER_LINEAR_EXACT` pyramid.
-Provided-keypoint ORB then uses that location, octave and refreshed orientation.
-OpenCV rounds descriptor sampling centers to octave pixels: subpixel observations
-do not imply continuously interpolated binary descriptors. A fresh CUDA descriptor
-instance avoids retained per-level counts when accepted octaves have gaps; its
-setup cost belongs in complete latency.
+CPU/CUDA use shared host localization before descriptor generation. Its library
+calls, support/quality checks, sampling recipe and parameter units are defined in
+the [profile](../spec/profiles/orb-frontend.md#raw-image-qualification). Passing
+those observable checks does not certify per-point convergence or physical noise.
 
 ## Mono replay
 

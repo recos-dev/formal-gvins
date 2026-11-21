@@ -19,12 +19,17 @@ algorithm settings separately from execution choice.
 ### Tracker interface
 
 FeatureTracker denotes a shared operation contract, not a required base class or
-forwarding wrapper. A concrete host tracker shall support
+forwarding wrapper. A concrete single-camera host tracker shall support
 `process(identity, image, mask, output)` returning `VisionStatus`, and `reset()`.
 The host image/mask inputs use `cv::Mat`; the image identity uses `ImageIdentity`.
 Method-specific options belong to construction/configuration of the concrete
 tracker, not to a common ORB-shaped options structure. A template caller may bind
 a concrete tracker through these named operations without virtual dispatch.
+
+A stereo owner may accept paired identities/images/masks and return two batches
+under [V-STEREO](stereo-association.md). It shall preserve the common observation
+format and that requirement's two-camera transaction boundary; it need not
+pretend a synchronized pair is one camera image.
 
 The owning `TrackedImage` result shall contain image bindings, an explicit pixel
 domain, `FeatureObservation` records and per-camera lifecycle events under V-OBSERVATION. It shall not require
@@ -90,14 +95,14 @@ uses only the shared tracker operations and output. Compare tracking with and
 without diagnostics under controlled execution, including failed/empty frames and
 reset. Check both outputs' failure atomicity and observation/diagnostic pairing.
 
+The [failure-injection tests](../../../../tests/test_tracker_failure.cpp) wrap pinned
+OpenCV calls in a test executable, without production fault hooks. They test
+exception handling and mono/stereo transaction boundaries, not physical GPU/driver
+fault recovery. Independent deterministic-control comparisons apply to CPU;
+CUDA evidence shall account for the profile's detector nondeterminism.
+
 ## Open decisions
 
 Deployment allocation-failure recovery, overload behavior and timing/memory limits
 are not selected. The current blocking interface does not authorize an unreviewed
 asynchronous pipeline or automatic backend switching.
-
-On GNU/Clang ELF hosts, `tracker_failure` wraps the pinned OpenCV essential-fit
-symbol in that test executable only. It forces a backend exception after initial
-history exists and compares a successful retry against an untouched control
-tracker. Production code has no fault hook. This checks exception handling and
-transaction boundaries, not physical GPU/driver fault recovery.

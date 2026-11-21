@@ -56,5 +56,9 @@ error in the qualified domain. Coordinate/calibration pairing and failure
 atomicity are separate obligations. Floating-point round trips alone do not
 prove a uniform inverse error bound.
 
-The [local VINS profile](../../profiles/local-vins.md#visual-constraints-and-updates)
-must qualify its camera domain, solver settings and error limits before acceptance.
+The [frontend profile](../../profiles/orb-frontend.md#camera-inverse) binds the
+implemented Newton solver, including units and bounded failure behavior. Its
+numerical residual tolerance is not a camera measurement-noise bound. The
+[local VINS profile](../../profiles/local-vins.md#visual-constraints-and-updates)
+must qualify its camera domain, solver settings and error limits before estimator
+acceptance; using the inverse in a frontend does not discharge those obligations.

@@ -55,9 +55,17 @@ This does not delete stored observations or authorize their reuse in the filter.
 The batch shall explicitly identify raw or undistorted pixel coordinates under
 the calibration binding. An unspecified domain is not an admitted measurement.
 Consumers shall not infer the domain from the tracker method or change it merely
-by relabeling coordinates. The current ORB path emits undistorted pixels; the
-raw-image migration remains a separate implementation change. Derived normalized
-bearings are not additional pixel observations.
+by relabeling coordinates. The [ORB profile](../../profiles/orb-frontend.md)
+publishes raw pixels and derives normalized bearings with the same calibration.
+Those bearings are not additional pixel observations.
+
+Each successful image batch shall include one `started` or `continued` event
+for each current observation and one `ended` event for each previous camera-local
+ID absent from the new active set. Events describe camera-local segments: a
+stereo observation may start a segment with an ID still active in its partner
+under [V-STEREO](stereo-association.md). Reset is an explicit retirement of the
+owner's entire active set, without recycling IDs or changing returned snapshots.
+Events do not authorize reuse of old measurements or merging independent identities.
 
 ## Acceptance and verification
 
@@ -69,12 +77,3 @@ verify that coordinate-domain metadata agrees with the actual processing path.
 The current ImageIdentity/FeatureObservation and tracker implement only the
 frontend portion; store-level evidence is required before accepting the whole
 contract.
-
-## Host lifecycle publication
-
-Each successful image batch shall include one `started` or `continued` event
-for each current observation and one `ended` event for each previous camera-local
-ID absent from the new active set. An empty successful set ends all previous
-tracks. A failed call publishes no changes. Reset is an explicit retirement of
-the owner's entire active set; the next frame starts new IDs. Events do not
-authorize reuse of old measurements or merging independent camera identities.

@@ -13,8 +13,8 @@
 ## Basis
 
 ORB descriptors establish appearance similarity, not subpixel measurement accuracy.
-The proposed baseline refines each detected corner in its own image before
-description, following the structure of [OpenVINS's grid detector][ov-grid].
+The selected development baseline refines each detected corner in its own image
+before description, following the structure of [OpenVINS's grid detector][ov-grid].
 [OpenCV cornerSubPix][cv-subpix] defines an iterative gradient-based corner method;
 its void-returning API does not certify convergence for each point.
 This is not cross-image optical flow or a rectified-stereo disparity search.
@@ -24,8 +24,11 @@ This is not cross-image optical flow or a rectified-stereo disparity search.
 For each candidate, localization shall use a bounded two-dimensional corner
 refinement in the original image domain. The profile shall bind pyramid level,
 patch/gradient support, interpolation, iteration cap, stopping tolerance,
-maximum displacement and observable localization-quality checks. Coordinates and displacement
-limits shall be expressed in original-image pixels after any pyramid conversion.
+maximum displacement and observable localization-quality checks. Published
+coordinates and total-displacement limits shall use original-image pixels.
+An iteration stopping tolerance may use octave pixels when the profile states
+that unit and its scale conversion. It shall not be presented as a bound on
+localization error in either coordinate system.
 
 Admission shall require finite coordinates, valid image/mask support for the
 entire computation, an accepted corner-quality measure and displacement within
@@ -68,7 +71,8 @@ same uncertainty as base-level corners.
 ## Profile binding
 
 The [frontend profile](../../profiles/orb-frontend.md#raw-image-qualification)
-owns numerical bounds and qualification. The production localizer has explicit trial bounds and synthetic-corner tests.
+owns numerical bounds and qualification. The production localizer has explicit
+trial bounds and synthetic-corner tests.
 Real-camera localization-noise qualification and deployment acceptance remain open.
 
 [cv-subpix]: https://docs.opencv.org/4.13.0/dd/d1a/group__imgproc__feature.html
