@@ -98,8 +98,9 @@ int main(int argc, char ** argv)
                 << "Session: 1; calibration binding: 1; noise-model binding: 1 (unqualified pixel model)\n"
                 << "ORB: candidates=" << options.orb.feature_count << "; levels=" << options.orb.pyramid_levels
                 << "; scale=" << options.orb.scale_factor << "; FAST=" << options.orb.fast_threshold
-                << "; WTA_K=2; Hamming\nSelection: " << options.feature_capacity << "; grid=" << options.grid_columns
-                << 'x' << options.grid_rows << "; ratio=" << options.ratio
+                << "; WTA_K=2; Hamming\nSelection: " << options.selection.capacity
+                << "; grid=" << options.selection.columns << 'x' << options.selection.rows
+                << "; ratio=" << options.ratio
                 << "; five-point essential RANSAC threshold=" << options.epipolar_threshold
                 << " normalized; confidence=" << options.confidence << "; max iterations=" << options.ransac_iterations
                 << '\n'

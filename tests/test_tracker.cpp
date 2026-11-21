@@ -249,6 +249,17 @@ int main(int argc, char ** argv)
         test.expect(output.observations[i].u == pixel.x && output.observations[i].v == pixel.y, "interface",
                     "diagnostic keypoints retain observation order");
     }
+    for (std::size_t i = 0; i < output.observations.size(); ++i)
+    {
+        test.expect(diagnostics.ages[i] == 1, "selection", "new track age");
+        for (std::size_t j = 0; j < i; ++j)
+        {
+            auto const & a = output.observations[i];
+            auto const & b = output.observations[j];
+            test.expect(std::hypot(a.u - b.u, a.v - b.v) >= options.selection.minimum_distance, "selection",
+                        "spacing across all cells and scales");
+        }
+    }
     auto const first_ids = ids;
     diagnostics.features.descriptors.setTo(0);
     auto const saved_output = output;
@@ -272,6 +283,11 @@ int main(int argc, char ** argv)
     for (auto const & observation : output.observations)
     {
         continued += first_ids.count(observation.track_id);
+    }
+    for (std::size_t i = 0; i < output.observations.size(); ++i)
+    {
+        test.expect(diagnostics.ages[i] == (first_ids.count(output.observations[i].track_id) ? 2U : 1U), "selection",
+                    "only retained associations age");
     }
     test.expect(continued == diagnostics.matches.inliers.size(), "tracking", "only verified matches inherit IDs");
     auto const last_id = output.identity.image_id;

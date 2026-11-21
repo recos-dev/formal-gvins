@@ -49,7 +49,12 @@ descriptor provenance. Mixing incompatible recipes requires separate validation
 and shall not be treated as equivalent execution of one descriptor profile.
 
 The tracking boundary's published count shall not exceed the configured feature
-capacity. Selection shall apply declared spatial quotas so a dense textured area
+capacity. After association, selection shall prioritize verified continuing tracks by age
+and stable ID, then fill available space with response-ranked new candidates.
+It shall enforce a declared minimum raw-pixel separation across cells/scales and
+apply the same quotas to continuing and new tracks. Reindex coordinates, rays,
+IDs, ages, descriptors and diagnostics together. Selection shall apply declared
+spatial quotas so a dense textured area
 cannot consume the entire allocation; empty regions need not produce artificial features. Descriptor
 storage shall be owned or have a lifetime covering every consumer. A retained
 keyframe shall own the descriptors and coordinate/calibration metadata needed

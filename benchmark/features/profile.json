@@ -17,6 +17,7 @@
     "feature_capacity": 400,
     "grid_columns": 8,
     "grid_rows": 6,
+    "minimum_distance_px": 8,
     "ratio": 0.75,
     "epipolar_threshold": 0.003,
     "confidence": 0.99,

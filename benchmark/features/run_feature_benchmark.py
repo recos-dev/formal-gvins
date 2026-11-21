@@ -64,11 +64,11 @@ def load_profile(path):
     for name, (low, high) in integer_limits.items():
         if type(options[name]) is not int or not low <= options[name] <= high:
             raise ValueError(f"Invalid tracking option: {name}")
-    for name in ("scale_factor", "ratio", "epipolar_threshold", "confidence"):
+    for name in ("scale_factor", "ratio", "epipolar_threshold", "confidence", "minimum_distance_px"):
         if type(options[name]) not in (int, float) or not math.isfinite(options[name]):
             raise ValueError(f"Invalid tracking option: {name}")
     if (not 1 < options["scale_factor"] <= 2 or not 0 < options["ratio"] < 1
-            or not 0 < options["confidence"] < 1 or options["epipolar_threshold"] <= 0
+            or not 0 < options["confidence"] < 1 or options["epipolar_threshold"] <= 0 or not 0 < options["minimum_distance_px"] <= 16384
             or not options["grid_columns"] * options["grid_rows"] <= options["feature_capacity"] <= options["feature_count"]):
         raise ValueError("Invalid tracking option range or capacity")
     return profile

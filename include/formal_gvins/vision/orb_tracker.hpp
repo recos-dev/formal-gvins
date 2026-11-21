@@ -10,6 +10,7 @@
 #include <formal_gvins/vision/orb.hpp>
 #include <formal_gvins/camera/radtan.hpp>
 #include <formal_gvins/vision/tracker.hpp>
+#include <formal_gvins/vision/selection.hpp>
 #include <cstddef>
 #include <vector>
 
@@ -21,9 +22,7 @@ struct OrbTrackingOptions
     OrbOptions orb;
     camera::Radtan<double> camera;
     camera::InverseDomain<double> inverse;
-    int feature_capacity = 400;
-    int grid_columns = 8;
-    int grid_rows = 6;
+    SelectionOptions selection;
     float ratio = 0.75F;
     double epipolar_threshold = 0.003;           // Normalized coordinates, not pixels.
     double minimum_epipolar_denominator = 1e-12; // E has unit Frobenius norm.
@@ -69,6 +68,10 @@ struct OrbTrackingDiagnostics
 {
     OrbFeatures features;
     OrbMatchResult matches;
+    SelectionStats selection;
+    std::vector<std::uint64_t> ages;
+    std::size_t inverse_rejected = 0;
+    std::size_t reciprocal_candidates = 0, geometric_candidates = 0;
 };
 
 /**
@@ -95,6 +98,7 @@ private:
     cv::Size m_image_size;
     OrbFeatures m_previous;
     std::vector<FeatureObservation> m_observations;
+    std::vector<std::uint64_t> m_ages;
     std::uint64_t m_next_track_id = 1;
 };
 

@@ -21,7 +21,7 @@ basis for experiments, not permission to inherit another estimator's thresholds.
 | Input | Raw radial-tangential pixels; required intrinsics and distortion; `CV_8UC1`, optional same-size `CV_8UC1` mask with nonzero meaning admitted. |
 | Candidate extraction | 1000 features, scale 1.2, 8 levels, FAST 20, Harris score, patch/edge 31, first level 0. |
 | Descriptor | WTA_K=2, 32-byte binary descriptor, Hamming distance; CPU and CUDA enable 7x7 Gaussian smoothing, sigma 2, `BORDER_REFLECT_101`. |
-| Publication | At most 400 features, 8 by 6 grid; stable response ordering, per-cell quotas; unused quotas are not redistributed. |
+| Publication | At most 400 features, 8 by 6 grid; verified continuing tracks first by age/ID, new candidates by response/index; 8 raw-pixel minimum spacing across cells/scales; per-cell quotas are not redistributed. |
 | Association | Two-nearest candidates in both directions; strict ratio 0.75 in both and mutual best; reject ties and missing runners-up. |
 | Geometry | Calibrated essential-matrix five-point RANSAC followed by explicit unit-model Sampson gating; 0.003 normalized-coordinate threshold, 0.99 confidence, 2000 maximum iterations; at least eight unique candidates and eight inliers. |
 | Failure to obtain geometry | Successful frame with no confirmed continuations; assign new IDs, never accept all matches as inliers. |
@@ -86,7 +86,7 @@ pairing, bounds, matching quality and complete latency for each backend. Stored
 map descriptors and vocabulary compatibility require separate qualification.
 
 The geometric test is an epipolar screen, not a depth/parallax, pose-observability
-or triangulation certificate. Minimum spacing, cross-scale deduplication and detector fallback are not yet part of this profile.
+or triangulation certificate. Detector fallback is not part of this profile.
 Changes require named experiments and renewed acceptance, not implicit adoption.
 
 Before estimator/deployment acceptance, bind pixel-noise covariance in the selected

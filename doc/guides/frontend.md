@@ -398,3 +398,20 @@ value above 1e-6 of the first.
 rotation, small baseline, planar and general scenes, over eight seeds each.
 This exercises a declared degeneracy policy; epipolar/rotation agreement still
 does not certify physical feature identity or triangulation validity.
+
+### Continuing-track selection
+
+The tracker matches the bounded detected/localized candidates before applying
+the publication grid. Verified continuing tracks rank first by descending age,
+then stable ID. New candidates rank by response and original candidate index.
+An 8 raw-pixel minimum Euclidean separation applies across every cell and octave.
+Per-cell quotas still apply to old and new tracks; unused quotas are not moved
+to other cells. A continuing candidate can therefore be retired by quota/spacing,
+but a stronger new detector response cannot displace an otherwise eligible old
+track. This cannot preserve a point that the current detector did not find.
+
+IDs are allocated only after selection. Descriptor rows, rays, ages and diagnostic
+match indices are reindexed together. Diagnostics distinguish pre-selection
+reciprocal/geometric counts from published matches, and report quota/spacing
+rejections. `feature_selection` tests ordering, exact spacing boundaries, identity
+validation and dense candidate accounting independently of ORB detection.

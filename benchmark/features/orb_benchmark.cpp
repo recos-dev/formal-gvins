@@ -90,9 +90,10 @@ Profile read_profile(char const * path, Execution execution)
     options.orb.scale_factor = static_cast<float>(real(tracking, "scale_factor"));
     options.orb.pyramid_levels = integer(tracking, "pyramid_levels");
     options.orb.fast_threshold = integer(tracking, "fast_threshold");
-    options.feature_capacity = integer(tracking, "feature_capacity");
-    options.grid_columns = integer(tracking, "grid_columns");
-    options.grid_rows = integer(tracking, "grid_rows");
+    options.selection.capacity = integer(tracking, "feature_capacity");
+    options.selection.columns = integer(tracking, "grid_columns");
+    options.selection.rows = integer(tracking, "grid_rows");
+    options.selection.minimum_distance = real(tracking, "minimum_distance_px");
     options.ratio = static_cast<float>(real(tracking, "ratio"));
     options.epipolar_threshold = real(tracking, "epipolar_threshold");
     options.confidence = real(tracking, "confidence");
@@ -135,9 +136,10 @@ void write_options(cv::FileStorage & output, OrbTrackingOptions const & options)
            << "{"
            << "feature_count" << options.orb.feature_count << "scale_factor" << options.orb.scale_factor
            << "pyramid_levels" << options.orb.pyramid_levels << "fast_threshold" << options.orb.fast_threshold
-           << "feature_capacity" << options.feature_capacity << "grid_columns" << options.grid_columns << "grid_rows"
-           << options.grid_rows << "ratio" << options.ratio << "epipolar_threshold" << options.epipolar_threshold
-           << "confidence" << options.confidence << "ransac_iterations" << options.ransac_iterations << "}";
+           << "feature_capacity" << options.selection.capacity << "grid_columns" << options.selection.columns
+           << "grid_rows" << options.selection.rows << "minimum_distance_px" << options.selection.minimum_distance
+           << "ratio" << options.ratio << "epipolar_threshold" << options.epipolar_threshold << "confidence"
+           << options.confidence << "ransac_iterations" << options.ransac_iterations << "}";
     // These are fixed properties of the production adapter, not benchmark switches.
     output << "adapter"
            << "{"
