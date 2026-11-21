@@ -140,8 +140,32 @@ PSD/symmetry are exact input premises; finite/diagonal C++ admission is not a PS
 certificate. Approximate A/B/J factors and rounded covariance cleanup require
 separate numerical/source evidence. Clone identity/time semantics are unchanged.
 
+## Group 6: Correction, joint injection and reset
+
+Requirements: M-CORRECT and M-FEJ. Source: `msckf/correction.hpp`.
+The adopted reset remains **identity**, coordinated with frozen FEJ coordinates.
+The physical Log-coordinate reset is proved separately; it is not inserted into
+this filter's covariance as an unreviewed design change.
+
+| Statements | Exact claim and premises |
+|---|---|
+| `Correction`: `innovationCovariance_posDef`, `kalmanGain_equation` | PSD prior and SPD observation covariance imply SPD innovation covariance and a unique right-solve gain; group 2 supplies substitution algebra. |
+| `Correction`: Joseph expansion, PSD, simplified-equation and covariance-reduction theorems | Joseph preserves PSD for any gain and PSD noise. Simplification/reduction requires the optimal solve and stays in the same pre-reset coordinates. |
+| `Injection`: `injectJoint_unit`, `normalized_unit_unchanged`, `injectJoint_zero`, `injectJoint_frozen` | Right Exp injection of every IMU/clone attitude preserves exact unit norm; additive offsets use the declared error order; zero correction is identity; all first estimates and clone identities/times are retained. |
+| `identityReset_eq`, `corrected_covariance_psd` | Identity reset retains the entire Joseph result, including cross-covariances, and preserves its PSD property. |
+| `ResetDifferential`: `resetRotationVector_hasFDerivAt`, `resetRotationVector_remainder` | Physical Log(Exp(-d)*Exp(d+e)) has full Fréchet derivative Jr(d) and a local little-o remainder, including d=0. This is not the selected FEJ identity reset. |
+| `Injection`: `reset_covariance_bound` | If both G-I and its adjoint/transpose have norm at most epsilon in a submultiplicative norm, the one-step covariance discrepancy is at most (2 epsilon+epsilon^2) times the covariance norm. |
+
+The physical-reset and generic correction foundations adapt the owner-authored
+source cited in group 1; joint injection and identity-reset composition are local.
+The norm bound does not yet derive epsilon from the configured angle or qualify
+repeated updates statistically. Concrete angle-to-norm, normalized-Euler-versus-Exp,
+Taylor and rounding bounds remain numerical acceptance work (group 11). An angle
+limit is a domain rule, not a proved consistency guarantee. C++ rollback, rejected
+updates and sensor/observation consumption remain separate source/runtime claims.
+
 ## Remaining sequence
 
-Groups 6–7 are listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
-and will receive their own theorem/premise mappings as implemented. Groups 8–11
+Group 7 is listed in the [work list](../roadmap.md#exact-lean-proof-sequence)
+and will receive its own theorem/premise mapping as implemented. Groups 8–11
 remain backlog. No completion percentage is inferred from declaration counts.
