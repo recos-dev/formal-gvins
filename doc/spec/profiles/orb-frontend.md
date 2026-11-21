@@ -96,7 +96,8 @@ image domain, tracking accuracy limits, exposure/clock assumptions, image-size/r
 allocation-failure recovery and target deadlines. RTX 3060 measurements cannot
 qualify Orin execution. The replay's development noise-model ID does not discharge
 these obligations. [Per-module benchmarks](../../roadmap.md#b-01-per-module-unit-benchmarks)
-remain planned evidence.
+report host timing, process RSS and synthetic matching quality; these measurements
+do not establish physical accuracy or target execution bounds.
 
 ## Optional stereo binding
 

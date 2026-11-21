@@ -29,9 +29,9 @@ path.
 | Detector | OpenCV multiscale ORB, Harris ranking | Grid FAST, followed by `ORB::compute`; not the full `detectAndCompute` path | Custom pyramid FAST and spatial-tree distribution, retaining FAST responses |
 | Pyramid | Scale 1.2, 8 levels | Do not interpret the default ORB object's 8 levels as an 8-level detection pass: points are supplied by grid FAST | Scale 1.2, 8 levels |
 | FAST threshold | 20 | 20 | Start at 20; retry an empty cell at 7 |
-| Spatial selection | 8x6 quotas after extraction; no explicit minimum separation | 5x5 extraction grid; `min_px_dist=10` occupancy cells in the descriptor path | Adaptive subdivision within each pyramid level |
-| Subpixel refinement | None beyond the extractor's reported coordinates | Grid detector calls `cornerSubPix`: 5x5 window, 20 iterations, epsilon 0.001 | No equivalent separate refinement in the reviewed extraction path |
-| Preprocessing | Undistort whole image; no histogram equalization; 752x480 in the demo | Histogram equalization; detect on the original image domain, undistort coordinates for geometry | Mono / mono-inertial YAML requests 600x350 from 752x480; stereo-inertial keeps 752x480 |
+| Spatial selection | 8x6 quotas after temporal verification; continuing tracks first; 8 raw-pixel minimum spacing across cells/scales | 5x5 extraction grid; `min_px_dist=10` occupancy cells in the descriptor path | Adaptive subdivision within each pyramid level |
+| Subpixel refinement | Octave-local refinement before description; radius 5, at most 20 iterations, epsilon 0.001 octave pixels; bounded raw displacement and support/quality checks | Grid detector calls `cornerSubPix`: `winSize=(5,5)` means an 11x11 window, 20 iterations, epsilon 0.001 | No equivalent separate refinement in the reviewed extraction path |
+| Preprocessing | Raw images with pointwise camera inversion; no histogram equalization; 752x480 in the demo | Histogram equalization; detect on the original image domain, undistort coordinates for geometry | Mono / mono-inertial YAML requests 600x350 from 752x480; stereo-inertial keeps 752x480 |
 | Descriptor smoothing | CPU and CUDA: 7x7 Gaussian, sigma 2, reflected borders | CPU OpenCV descriptor computation includes smoothing | 7x7 Gaussian, sigma 2 |
 
 Sources: [OpenVINS configuration][ov-config], [grid detector][ov-grid],
@@ -65,17 +65,16 @@ for admitted pixels. A borrowed mask needs an explicit conversion.
 
 | Stage | Current formal-gvins | OpenVINS descriptor path |
 |---|---|---|
-| Nearest neighbors | Previous to current, two Hamming neighbors | Both directions, two Hamming neighbors |
-| Ratio | Strict `d1 < 0.75*d2`; ties including two zero distances rejected | Configured ratio 0.70, followed by reciprocal matching |
-| Conflicts | Lowest-distance deterministic one-to-one selection | Accept only reciprocal best matches after both ratio tests |
-| Geometric model | Calibrated essential matrix, five-point RANSAC | Fundamental matrix RANSAC on undistorted normalized coordinates |
-| Threshold | 1.5 undistorted-pixel units; OpenCV scales by mean focal length | `1 / max(fx0,fy0,fx1,fy1)` in normalized coordinates |
+| Nearest neighbors | Both directions, two Hamming neighbors | Both directions, two Hamming neighbors |
+| Ratio | Strict `d1 < 0.75*d2` in both directions; ties and missing runners-up rejected | Configured ratio 0.70, followed by reciprocal matching |
+| Conflicts | Accept only reciprocal best matches after both ratio tests | Accept only reciprocal best matches after both ratio tests |
+| Geometric model | Calibrated essential matrix, five-point RANSAC and explicit Sampson gate; conditional proper-rotation screening of E inliers | Fundamental matrix RANSAC on undistorted normalized coordinates |
+| Threshold | 0.003 normalized coordinates; explicit unit-Frobenius E and denominator floor | `1 / max(fx0,fy0,fx1,fy1)` in normalized coordinates |
 | Robust-estimation parameters | Confidence 0.99, explicit 2000-iteration cap; at least 8 candidates and 8 inliers | Confidence 0.999; at least 10 candidates; no explicit max-iteration argument at this call |
 
 [OpenVINS matching source][ov-match] is a suitable comparison for our MSCKF
-frontend. Reciprocal matching and greedy uniqueness are different acceptance
-rules. Preserve our explicit tie rejection: the reference's division-based ratio
-test rejects only values greater than its threshold, so copying that expression
+frontend. Both paths use reciprocal association; retain our explicit tie rejection:
+the reference's division-based ratio test rejects only values greater than its threshold, so copying that expression
 would change equality and zero-distance behavior.
 
 ORB-SLAM3 has **no single global ratio setting**. Its matcher constructor
@@ -104,10 +103,10 @@ VINS-Mono's loop path uses FAST threshold 20 and BRIEF, not the same local track
 |---|---|
 | Basic descriptor profile | Keep scale 1.2, 8 levels, FAST 20, WTA_K=2/Hamming and patch 31 as a source-backed starting point. This does not validate accuracy or budgets. |
 | CPU/CUDA comparability | CUDA descriptor blur is enabled to match the CPU preprocessing intention. The fixed-window benchmark exercises both paths; equal blur settings do not imply identical extraction/descriptors or qualify other sequences/devices. |
-| Association policy | Compare reciprocal matching with the current greedy rule; use OpenVINS's 0.70 as a reference trial alongside 0.75. Do not copy its ratio edge-case behavior. |
-| Spatial distribution | Evaluate proximity suppression and cross-scale duplicate selection before raising feature counts. Test 200 and 400 retained observations separately from the 1000-candidate budget. Grid-first detection and post-selection quotas are not equivalent. |
-| Low texture and pixel precision | Evaluate FAST 20-to-7 fallback, histogram processing and subpixel refinement separately. Each changes behavior, cost or measurement-noise assumptions. |
-| Geometry | Retain the declared calibrated essential model for the initial comparison; test thresholds 1.0/1.5 in its stated domain. The reference F model/threshold is not a drop-in equivalent. Neither a RANSAC threshold nor confidence is a calibrated measurement covariance. |
+| Association policy | Reciprocal ratio matching is implemented. Compare 0.70/0.75 with known correspondences and track loss before changing the default; retain explicit tie rejection. No absolute Hamming gate is selected. |
+| Spatial distribution | Continuation-first publication and cross-cell/scale minimum spacing are implemented. Qualify retained track length and coverage separately from the 1000-candidate and 400-publication budgets. Grid-first detection and post-selection quotas are not equivalent. |
+| Low texture and pixel precision | Bounded subpixel localization precedes description. Qualify real-camera noise and per-octave error; FAST 20-to-7 fallback and histogram processing remain separate, unselected experiments. |
+| Geometry | Normalized essential screening, conditional proper-rotation screening and optional known-rig stereo are implemented. Static/rotation/low-parallax/planar fixtures exercise admission; physical correspondence remains unqualified. Earlier pixel-domain thresholds cannot be reused as normalized units. |
 | Future map descriptors | Bind extraction/preprocessing/version to stored descriptors and the vocabulary. Do not assume CPU, CUDA, OpenVINS or ORB-SLAM3 descriptors are interchangeable because each is called ORB. |
 
 **Comparison limits:** results with CUDA smoothing disabled are a different
@@ -124,8 +123,9 @@ synthetic known-correspondence errors and complete frontend latency. Inlier coun
 alone do not measure false associations. Once the estimator exists, add trajectory
 and consistency evaluation before selecting deployment defaults.
 
-This survey changes neither code nor Draft requirement approval. The
-[frontend guide](../guides/frontend.md) owns build/replay commands; experimental
+The [ORB profile](../spec/profiles/orb-frontend.md) owns the complete current
+parameter binding and failure policy. This survey does not approve Draft
+requirements. The [frontend guide](../guides/frontend.md) owns build/replay commands; experimental
 outputs stay outside versioned documentation.
 
 [ov-config]: https://github.com/rpng/open_vins/blob/69488123ed9362dd44b6f28e7f4680abbff1442b/config/euroc_mav/estimator_config.yaml
