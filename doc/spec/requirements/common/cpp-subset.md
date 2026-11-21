@@ -4,7 +4,7 @@
 
 **Status:** Draft
 
-**Applies to:** Handwritten numerical core and portable runtime; backend/platform exceptions are explicit below.
+**Applies to:** Handwritten numerical core and portable runtime; composition and source-organization rules also cover host frontends and applications. Backend/platform exceptions are explicit below.
 
 ## Required behavior
 
@@ -33,9 +33,10 @@ C++20 remains available within this subset. Newer syntax must make the permitted
 | Code responsibility | Required approach |
 |---|---|
 | Scalar, fixed-size math and backend operations | Basic templates for numeric types, backends and dimensions are permitted. Keep storage access and backend-specific machinery here. |
-| Compile-time configuration | Select backend, precision and estimator configuration at a clear boundary. Resolve related state, error, covariance and dimension types together. |
+| Compile-time configuration | Select backend, precision, capacities and concrete component types at the application/configuration boundary. Resolve related state, error, covariance and dimension types together. |
 | MSCKF propagation, cloning, observation, correction and reset | Write direct numerical steps using the resolved types. Common mathematical helpers may remain dimension/backend templates; sensor-specific behavior uses named functions or explicit overloads. |
 | Fusion lifecycle and portable runtime | Use ordinary state-holding classes/structs and direct calls. A simple template binding to the selected numerical configuration is permitted; it must not turn each transition into a generic policy-dispatch interface. |
+| Host pipeline composition | A small class template may bind complete filter and frontend types through named operations. Keep image-library execution outside the numerical core; do not turn individual processing steps into policies. |
 | Deployment adapter | Bind the deployment configuration and convert inputs/outputs. Do not expose backend storage or propagate type-selection machinery through platform callbacks. |
 
 For new or redesigned estimator/runtime code:
@@ -47,6 +48,65 @@ For new or redesigned estimator/runtime code:
 - Long argument lists and forwarding are not violations by themselves. Keep each input's purpose and each layer's interface/contract responsibility clear; do not add layers solely to combine and then redispatch already distinct estimator paths.
 
 Preserve the reusable fixed-size linalg abstraction and independently callable numerical APIs. These rules do not require a global backend selection, a single precision, a particular class hierarchy, or duplication of shared estimator mathematics. Extensions to these boundaries follow the specification-change rule below.
+
+### Application composition
+
+The application `.cpp` shall select concrete component types, establish the
+configuration and construct the objects used for a session. Sensor/dataset I/O,
+argument/configuration loading and output publication shall remain in the host
+application or deployment adapter. The numerical core shall remain usable without
+an image frontend. [Application composition](../../architecture/application-composition.md)
+allocates these responsibilities to the proposed VINS pipeline.
+
+The application shall own the assembled components, directly or through an
+explicit owner with the same session lifetime. A reusable pipeline shall borrow
+required components through references; their lifetimes and addresses shall remain
+valid while borrowed. Assembly shall not copy a stateful filter/frontend, create
+an independent duplicate estimate, or hide ownership in a service registry or
+mutable global. Large state/workspace placement shall be explicit; construction
+in a `.cpp` does not require putting all storage on the thread stack.
+
+A template parameter shall represent a real type, numerical representation,
+capacity or selected algorithm variation. Complete component selection shall use
+direct named calls; it shall not introduce per-stage callback, traits or policy
+dispatch. Thresholds, calibration and other ordinary values shall remain explicit
+configuration data unless a particular compile-time choice has a justified owner.
+The existing CPU/CUDA execution choice may remain an explicit frontend setting;
+component composition alone does not require a new template variant for it.
+
+The host pipeline may depend on both frontend and filter interfaces. It shall
+transfer observations through the declared coordinate/time/calibration contract,
+without exposing image/device types to numerical equations or reimplementing the
+filter's lifecycle. It shall handle the components' declared results and preserve
+their failure/consumption semantics; successful composition shall not be inferred
+from construction or a template compiling. Session resets and reconfiguration
+shall follow the owning contracts, not implicit component replacement.
+
+### Headers and translation units
+
+Public data types and component declarations shall reside in `.hpp` files.
+Nontrivial non-template implementations shall normally reside in corresponding
+`.cpp` files; small inline/constexpr definitions may remain in headers when that
+makes the interface clearer. Private implementation helpers shall remain local
+to the implementation unless another component has a concrete need for them.
+Related operations may share a file; requirement IDs do not prescribe file count.
+
+Template definitions needed by consumers shall be visible through the included
+headers. Longer member definitions may follow the class declaration in the same
+header. Moving templates into `.cpp` with explicit instantiations requires an
+explicit supported-type/capacity and linking decision; it is not the default.
+A templated pipeline may call an ordinary component method defined in `.cpp`:
+the method's declaration is visible at compilation and its definition is linked.
+Non-template header definitions shall obey the one-definition rule; header
+placement alone does not imply `inline` or runtime inlining.
+
+Each public header shall include the declarations it needs and shall not depend
+on a consumer's include order. Consumers shall not include `.cpp` files. Host
+frontend headers may expose OpenCV types under their own contract; this does not
+permit such dependencies in core headers. Build targets shall keep frontend
+libraries optional for consumers of numerical components alone. Public build
+definitions affecting a component's layout/interface shall agree between its
+compiled implementation and consumers.
 
 ### Language subset
 
@@ -223,8 +283,6 @@ For each change, check that:
 - State ownership, validation order and successful publication remain explicit.
 - Added language/library features meet the relevant target and verification constraints.
 
-Template definitions may remain in headers. Moving them into `.cpp` with explicit instantiations changes the supported linking/extension model and requires an explicit design decision; it is not mandatory style cleanup.
-
 ### Trusted computing base
 
 Source-level verification does not by itself verify the compiler, assembler, linker, runtime libraries, operating system, generated machine code, or processor.
@@ -234,3 +292,10 @@ Source-level verification does not by itself verify the compiler, assembler, lin
 Review source and dependencies against the permitted subset and the layer-specific
 restrictions. Compiler acceptance alone does not establish bounded execution or
 verifier/target support. Preserve the declared build profile and reviewed deviations.
+
+Review assembled-object lifetimes, unique state ownership, configuration boundaries
+and direct-call structure. Check numerical consumers with frontend dependencies
+disabled, public-header self-containment, and multi-translation-unit compilation
+and linking for the supported configurations. Composed execution still requires
+the lifecycle and frontend contracts; neither header-only code nor static component
+selection establishes correctness, timing or end-to-end proof coverage.

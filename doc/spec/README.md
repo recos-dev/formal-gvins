@@ -121,6 +121,9 @@ complete estimator.
 
 ## Architecture proposals
 
+- [Application and Component Composition](architecture/application-composition.md)
+  (Draft): application ownership, reusable VINS assembly, template boundaries and
+  `.hpp`/`.cpp` responsibilities under C-CPP-SUBSET.
 - [MSCKF Formulation](architecture/msckf-formulation.md) (Draft): state and frame
   conventions, IMU-pose clones, visual constraints, joint updates and proof scope.
 

@@ -13,6 +13,7 @@ requirement-decomposition relationship.
 | Planned development work | [Work list](roadmap.md) |
 | C++ readability and organization | [Coding style](guides/coding-style.md) |
 | Language and execution restrictions | [C++ subset](spec/requirements/common/cpp-subset.md) |
+| Application assembly, templates and source layout | [Application and component composition](spec/architecture/application-composition.md) |
 | Offline experiments and regression data | [Dataset selection and regression proposal](analysis/offline-datasets.md) |
 | Downloading development recordings | [Dataset download guide](guides/datasets.md) |
 | CPU/CUDA frontend and EuRoC replay | [Frontend build and usage](guides/frontend.md) |

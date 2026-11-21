@@ -46,6 +46,23 @@ changed header without modifying it:
 clang-format-14 --style=file --dry-run --Werror path/to/header.hpp
 ```
 
+### Headers and implementations
+
+Follow the [source-organization contract](../spec/requirements/common/cpp-subset.md#headers-and-translation-units)
+and [application composition](../spec/architecture/application-composition.md).
+Keep the public interface easy to scan in `.hpp`; place substantial ordinary
+method bodies in `.cpp`. A template definition can follow its class declaration
+in the header without putting the whole algorithm inside the class body.
+
+A `.cpp` includes its own public header and the implementation dependencies it
+uses. Keep file-local helpers in an anonymous namespace. Do not expose helpers
+solely to divide a short processing sequence into more files. Group related
+operations by behavior and ownership; multiple requirement IDs can map to one file.
+
+Put concrete application aliases and object assembly near the application entry.
+Keep borrowed component lifetimes visible. Use short resolved names at call sites,
+and reserve template arguments for the actual variation defined in C-CPP-SUBSET.
+
 ## Types and Interfaces
 
 - Write references to const objects as `Type const &`.
