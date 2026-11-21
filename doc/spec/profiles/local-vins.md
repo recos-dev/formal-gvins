@@ -37,12 +37,11 @@ it into shorter segments. Interpolation is allowed only within covered intervals
 extrapolation and interval clamping are not. Zero-duration boundaries require no
 propagation. Reverse/duplicate image times are rejected before changing state.
 
-This is the selected estimator input domain, not the current frontend behavior.
-The [acquisition](euroc.md#local-vins-target) and
-[ORB](orb-frontend.md#local-vins-target) profiles identify the required migration
-from remapped images. Raw and derived normalized coordinates share one feature
-identity; inverse-camera numerical limits and the frontend epipolar threshold
-must be qualified before estimator integration.
+The standalone frontends implement this selected raw-image input domain. The
+[acquisition](euroc.md#local-vins-target) and [ORB](orb-frontend.md#local-vins-target)
+profiles bind the current implementation. Raw and derived normalized coordinates
+share one feature identity; inverse-camera numerical limits, pixel noise and
+frontend geometry still require qualification before estimator integration.
 
 ## Capacity and ownership
 

@@ -38,7 +38,7 @@ iterations are 1--10000. These validation limits are not calibrated quality boun
 Initialization/configuration status is checked before operation-specific input;
 OpenCV exceptions are contained, while host allocation exceptions may propagate.
 
-## Raw coordinate binding
+## Local VINS target
 
 The tracker publishes raw pixels and their derived normalized rays. Pointwise
 inverse semantics are defined by [M-UNPROJECT](../requirements/msckf/camera-unprojection.md).

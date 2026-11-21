@@ -199,13 +199,15 @@ ignored directories; selected release evidence follows the existing policy.
 
 1. Establish the independent pair scorer and validate it with known-answer
    coordinate fixtures, including correct, false, duplicate, empty and missing
-   outputs. This is the current implementation boundary described below.
+   outputs. This scorer is implemented and shared by the workloads below.
 2. Exercise actual frontend calls through one runner, using fixed inputs and
    recording quality, failures and execution cost. The initial ORB pipeline now
-   runs real EuRoC frames plus known translations. CUDA comparison qualification,
-   additional resource measurements and per-stage profiling remain open.
-3. Add reviewed baseline comparison, identity/compatibility checks and explicit
-   regression decisions. Qualify a second algorithm and optional HPatches cases
+   runs real EuRoC frames plus known translations. Per-stage timings and process
+   high-water RSS are available. Controlled CPU/CUDA comparisons, GPU allocation
+   and target-resource qualification remain open.
+3. Compatible-report deltas and identity checks are implemented. Add reviewed
+   acceptance limits and explicit regression decisions. Qualify a second algorithm
+   and optional HPatches cases
    with the same scorer and held-out evaluation.
 
 Initial mappings use [V-ORB](../spec/requirements/vision/orb-frontend.md),
@@ -234,8 +236,9 @@ membership is the prediction being evaluated, never the reference label.
 The [suite entry](../../scripts/run_benchmark.py) runs CPU then CUDA using a shared
 profile/executable, checks recorded input/build bindings, and archives combined
 JSON plus readable metric tables in a fresh output directory. Results remain
-unreviewed baseline candidates; reviewed tolerances, repeated-run qualification
-and automatic baseline comparison are not implemented.
+unreviewed baseline candidates; reviewed tolerances and repeated-run qualification
+remain pending. Compatible-report metric deltas are implemented; automatic
+acceptance/replacement is not.
 
 [feature_metrics.py](../../benchmark/features/feature_metrics.py) is a host-only Python
 3.10+ module using the standard library. It has no detector, OpenCV or GPU
@@ -278,9 +281,10 @@ configuration snapshots and independent workload control. Filesystem-failure
 tests check that failed CSV creation/replacement cannot publish a successful
 summary. CTest can also run the actual fixed-dataset pipeline by
 explicitly configuring its dataset path. Execution completion is distinct from
-quality acceptance. Temporal identity/survival scoring, spatial coverage,
-per-stage timing, memory measurements and baseline decisions remain open; there
-is no regression PASS/FAIL decision yet.
+quality acceptance. Temporal lifecycle/censored lengths, grid occupancy, rejection
+counts, per-stage timing and process high-water RSS are implemented. GPU allocation,
+qualified target bounds and reviewed baseline decisions remain open; there is no
+automatic regression PASS/FAIL decision.
 
 ## References
 
